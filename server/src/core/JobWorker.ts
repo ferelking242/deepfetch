@@ -45,7 +45,9 @@ export class JobWorker {
     if (this.resources.isPaused()) return
 
     const poolStats = this.pool.getStats()
-    const available = poolStats.max - poolStats.active - 1 // keep 1 reserved
+    // Reserve one slot only when pool_max > 1; otherwise allow the single slot to be used
+    const reserved = poolStats.max > 1 ? 1 : 0
+    const available = poolStats.max - poolStats.active - reserved
     if (available <= 0) return
 
     const job = this.queue.dequeue()
@@ -64,21 +66,17 @@ export class JobWorker {
     jobEvents.emit('job:started', job)
 
     const startMs = Date.now()
-    let context: import('playwright').BrowserContext | null = null
 
     try {
       // Load session if specified
       const sessionStore = new SessionStore()
       const session = job.session_id ? sessionStore.get(job.session_id) : null
 
-      // Acquire browser context (inject cookies if session exists)
-      context = await this.pool.acquire(session?.cookies)
-
-      // Find platform adapter
+      // Find platform adapter — adapters own their own context acquisition/release
       const adapter = this.registry.resolve(job.url)
       logger.info({ platform: adapter.name }, 'Using platform adapter')
 
-      // Execute scrape
+      // Execute scrape (adapter acquires/releases browser context internally)
       const result = await adapter.scrape({
         job,
         session,
@@ -96,11 +94,6 @@ export class JobWorker {
       this.queue.fail(job.id, msg)
       logger.error({ err }, 'Job failed')
       jobEvents.emit('job:failed', { ...job, error: msg, status: 'failed' })
-
-    } finally {
-      if (context) {
-        await this.pool.release(context)
-      }
     }
   }
 }

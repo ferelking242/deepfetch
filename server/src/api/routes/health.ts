@@ -32,8 +32,4 @@ export function registerHealthRoutes(
     return reply.send(health)
   })
 
-  fastify.get('/v1/platforms', async (_req, reply) => {
-    // Platforms info is registered in index.ts via registry
-    return reply.send({ message: 'Use the registry endpoint' })
-  })
 }

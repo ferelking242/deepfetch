@@ -28,6 +28,7 @@ import { registerCrawlRoutes } from './api/routes/crawl.js'
 import { registerSessionRoutes } from './api/routes/sessions.js'
 import { registerKeyRoutes } from './api/routes/keys.js'
 import { registerWebSocketRoutes } from './api/websocket/jobStream.js'
+import { authMiddleware } from './api/middleware/auth.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -91,19 +92,25 @@ async function main() {
   fs.mkdirSync(screenshotsDir, { recursive: true })
   await fastify.register(fastifyStatic, { root: screenshotsDir, prefix: '/screenshots', decorateReply: false })
 
-  // ── Register routes ───────────────────────────────────────────────────────
+  // ── Public routes (no auth required) ─────────────────────────────────────
   registerHealthRoutes(fastify, { resources, pool, queue })
-  registerJobRoutes(fastify, { queue })
-  registerScrapeRoutes(fastify, { queue, pool, registry, sessionStore, resources, aiEngine })
-  registerBatchRoutes(fastify, { queue, registry, sessionStore })
-  registerCrawlRoutes(fastify, { queue, registry })
-  registerSessionRoutes(fastify, { store: sessionStore, validator: sessionValidator, loginAgent })
-  registerKeyRoutes(fastify)
-  registerWebSocketRoutes(fastify, { queue })
 
-  // Platform list endpoint
-  fastify.get('/v1/platforms', async (_req, reply) => {
-    return reply.send({ platforms: registry.list() })
+  // ── Protected routes (require valid API key) ──────────────────────────────
+  await fastify.register(async (protected_) => {
+    protected_.addHook('preHandler', authMiddleware)
+
+    registerJobRoutes(protected_, { queue })
+    registerScrapeRoutes(protected_, { queue, pool, registry, sessionStore, resources, aiEngine })
+    registerBatchRoutes(protected_, { queue, registry, sessionStore })
+    registerCrawlRoutes(protected_, { queue, registry })
+    registerSessionRoutes(protected_, { store: sessionStore, validator: sessionValidator, loginAgent })
+    registerKeyRoutes(protected_)
+    registerWebSocketRoutes(protected_, { queue })
+
+    // Platform list endpoint
+    protected_.get('/v1/platforms', async (_req, reply) => {
+      return reply.send({ platforms: registry.list() })
+    })
   })
 
   // Root info

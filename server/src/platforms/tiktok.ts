@@ -18,7 +18,12 @@ export class TikTokAdapter implements PlatformAdapter {
   ) {}
 
   canHandle(url: string): boolean {
-    return this.domains.some(d => url.includes(d))
+    try {
+      const hostname = new URL(url).hostname.replace(/^www\./, '')
+      return this.domains.some(d => d.replace(/^www\./, '') === hostname)
+    } catch {
+      return false
+    }
   }
 
   async scrape(ctx: ScrapeContext): Promise<ScrapeResult> {
