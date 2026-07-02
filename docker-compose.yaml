@@ -1,0 +1,24 @@
+services:
+  deepfetch:
+    build: .
+    container_name: deepfetch
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+      - ./config.yaml:/app/config.yaml:ro
+    environment:
+      - NODE_ENV=production
+      # Override any config.yaml values via env:
+      # - MASTER_SECRET=your-secret-here
+      # - SESSION_ENC_KEY=your-32-byte-hex-key
+      # - OPENAI_API_KEY=sk-...
+      # - GROQ_API_KEY=gsk_...
+      # - GOOGLE_GENERATIVE_AI_API_KEY=...
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s

@@ -1,0 +1,85 @@
+server:
+  port: 3000
+  host: "0.0.0.0"
+  # Set to a strong random string — used to sign API keys
+  master_secret: "change-me-to-something-strong-and-random"
+
+browser:
+  # Leave 0 for auto-detection based on RAM/CPU
+  pool_max: 0
+  # Always keep this many contexts free for high-priority jobs
+  pool_reserved: 1
+  # Recycle a context after N seconds of idle time
+  context_ttl_seconds: 300
+  # Max page load time before aborting
+  navigation_timeout_ms: 30000
+  headless: true
+
+resources:
+  # Pause new jobs if CPU usage exceeds this %
+  cpu_threshold_pct: 85
+  # Reduce pool if RAM usage exceeds this %
+  ram_threshold_pct: 80
+
+queue:
+  # Max retry attempts for failed jobs
+  max_retries: 3
+  # Base delay for exponential backoff (ms)
+  retry_base_delay_ms: 2000
+  # How long to keep completed jobs in DB (seconds)
+  result_ttl_seconds: 86400
+
+ai_engine:
+  enabled: true
+  # Trigger: "on_selector_failure" | "always" | "never"
+  trigger: "on_selector_failure"
+  # Max HTML characters to send to the AI (truncated if longer)
+  max_html_chars: 50000
+  timeout_ms: 15000
+  # Providers tried in order — first one with a valid key is used
+  providers:
+    - name: ollama
+      local: true
+      model: "llama3.2"
+      base_url: "http://localhost:11434"
+
+    - name: groq
+      api_key: ""  # or set env var GROQ_API_KEY
+      model: "llama-3.3-70b-versatile"
+
+    - name: gemini
+      api_key: ""  # or set env var GOOGLE_GENERATIVE_AI_API_KEY
+      model: "gemini-2.0-flash"
+
+    - name: openai
+      api_key: ""  # or set env var OPENAI_API_KEY
+      model: "gpt-4o-mini"
+
+    - name: anthropic
+      api_key: ""  # or set env var ANTHROPIC_API_KEY
+      model: "claude-haiku-4-5"
+
+    - name: deepseek
+      api_key: ""  # or set env var DEEPSEEK_API_KEY
+      model: "deepseek-chat"
+
+    - name: xai
+      api_key: ""  # or set env var XAI_API_KEY
+      model: "grok-3-mini"
+
+    - name: mistral
+      api_key: ""  # or set env var MISTRAL_API_KEY
+      model: "mistral-small-latest"
+
+zeusdl:
+  # Path to zeusdl binary — defaults to searching $PATH
+  binary: "zeusdl"
+  # Extra flags passed to every zeusdl invocation
+  extra_flags: []
+
+sessions:
+  # AES-256-GCM encryption key for the session store (32 bytes hex)
+  # Run: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+  encryption_key: "change-me-32-byte-hex-key-here-000"
+  # How often to check session validity (seconds)
+  check_interval_seconds: 1800
