@@ -1,0 +1,16 @@
+{
+  "name": "deepfetch-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for DeepFetch — gives AI agents scrape/crawl/actions tools",
+  "type": "module",
+  "main": "server.js",
+  "bin": {
+    "deepfetch-mcp": "./server.js"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}
