@@ -79,7 +79,6 @@ async function main() {
     await fastify.register(fastifyStatic, {
       root: dashboardDist,
       prefix: '/dashboard',
-      decorateReply: false,
     })
     // SPA fallback: all /dashboard/* routes serve index.html
     const serveIndex = (_req: any, reply: any) => reply.sendFile('index.html', dashboardDist)
