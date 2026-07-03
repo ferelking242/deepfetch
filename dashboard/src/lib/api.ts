@@ -122,3 +122,28 @@ export interface CreateCredSession {
   password: string
   label?: string
 }
+
+// ─── Crawl ────────────────────────────────────────────────────────────────────
+export interface CrawlRequest {
+  url: string
+  max_depth?: number
+  max_pages?: number
+  include_patterns?: string[]
+  exclude_patterns?: string[]
+  output?: string[]
+}
+export interface CrawlResponse { job_id: string; status: string }
+
+export const crawl = (body: CrawlRequest) =>
+  apiFetch<CrawlResponse>('/v1/crawl', { method: 'POST', body: JSON.stringify(body) })
+
+// ─── Batch ────────────────────────────────────────────────────────────────────
+export interface BatchRequest {
+  requests: Array<{ url: string; output?: string[]; options?: Record<string, unknown> }>
+  priority?: 'high' | 'normal' | 'batch'
+}
+export interface BatchResponse { job_ids: string[]; count: number }
+
+export const batch = (body: BatchRequest) =>
+  apiFetch<BatchResponse>('/v1/batch', { method: 'POST', body: JSON.stringify(body) })
+
