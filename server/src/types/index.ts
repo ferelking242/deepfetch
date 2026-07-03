@@ -23,6 +23,13 @@ export interface Job {
   finished_at: number | null
 }
 
+export type BrowserAction =
+  | { type: 'fill'; selector: string; value: string }
+  | { type: 'click'; selector: string }
+  | { type: 'wait_for_url'; pattern: string }
+  | { type: 'wait_for_selector'; selector: string }
+  | { type: 'select'; selector: string; value: string }
+
 export interface ScrapeOptions {
   output: OutputFormat[]
   extract?: string[]
@@ -32,6 +39,7 @@ export interface ScrapeOptions {
   timeout_ms?: number
   crawl_depth?: number
   crawl_limit?: number
+  actions?: BrowserAction[]
 }
 
 export interface ScrapeResult {
