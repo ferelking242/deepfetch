@@ -104,7 +104,8 @@ export class AIEngine {
       const model = provider(pcfg.model)
 
       const { object } = await generateObject({
-        model,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        model: model as any,
         schema: extractionSchema,
         system: SYSTEM_PROMPT,
         prompt: `${hint ? `Context: ${hint}\n\n` : ''}Extract structured data from this HTML:\n\n${truncatedHtml}`,
