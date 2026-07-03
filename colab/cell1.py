@@ -48,7 +48,7 @@ cf_ver = sh('cloudflared --version 2>/dev/null', check=False)
 if cf_ver:
     ok(cf_ver.split()[2] if len(cf_ver.split()) > 2 else cf_ver)
 else:
-    sh('pkill -f cloudflared 2>/dev/null || true; sleep 1')
+    sh('pkill -f cloudflared 2>/dev/null; sleep 1', check=False)
     sh('wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 '
        '-O /usr/local/bin/cloudflared && chmod +x /usr/local/bin/cloudflared')
     ok(sh('cloudflared --version').split()[2])
