@@ -63,14 +63,33 @@ export class GenericAdapter implements PlatformAdapter {
 
       if (job.options.scroll) {
         await autoScroll(page)
-      }
+        }
 
-      const { data, extracted_by } = await runExtractionPipeline(page, 'generic', logger, this.aiEngine)
+        // Execute browser actions (fill, click, navigate) before extraction
+        if (job.options.actions?.length) {
+          for (const action of job.options.actions) {
+            if (action.type === 'fill') {
+              await page.fill(action.selector, action.value)
+            } else if (action.type === 'click') {
+              await page.click(action.selector)
+              await page.waitForTimeout(1500)
+            } else if (action.type === 'wait_for_url') {
+              await page.waitForURL(action.pattern, { timeout: 15_000 }).catch(() => null)
+            } else if (action.type === 'wait_for_selector') {
+              await page.waitForSelector(action.selector, { timeout: 10_000 }).catch(() => null)
+            } else if (action.type === 'select') {
+              await page.selectOption(action.selector, action.value)
+            }
+          }
+        }
 
-      await page.close()
-      await this.pool.release(context)
+        const finalUrl = page.url()
+        const { data, extracted_by } = await runExtractionPipeline(page, 'generic', logger, this.aiEngine)
 
-      return { url: job.url, platform: 'generic', data, extracted_by, duration_ms: 0 }
+        await page.close()
+        await this.pool.release(context)
+
+        return { url: finalUrl, platform: 'generic', data, extracted_by, duration_ms: 0 }
     } catch (err) {
       await this.pool.release(context)
       throw err
