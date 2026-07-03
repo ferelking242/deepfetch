@@ -85,7 +85,6 @@ async function main() {
     const serveIndex = (_req: any, reply: any) => reply.sendFile('index.html', dashboardDist)
     fastify.get('/dashboard', serveIndex)
     fastify.get('/dashboard/', serveIndex)
-    fastify.get('/dashboard/*', serveIndex)
   } else {
     fastify.log.warn(`Dashboard dist not found at: ${dashboardDist}`)
   }
