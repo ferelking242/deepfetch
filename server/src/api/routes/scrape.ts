@@ -23,7 +23,14 @@ const ScrapeBodySchema = z.object({
     scroll: z.boolean().default(false),
     wait_for: z.string().optional(),
     timeout_ms: z.number().int().min(1000).max(120_000).optional(),
-  }).default({}),
+      actions: z.array(z.union([
+        z.object({ type: z.literal('fill'), selector: z.string(), value: z.string() }),
+        z.object({ type: z.literal('click'), selector: z.string() }),
+        z.object({ type: z.literal('wait_for_url'), pattern: z.string() }),
+        z.object({ type: z.literal('wait_for_selector'), selector: z.string() }),
+        z.object({ type: z.literal('select'), selector: z.string(), value: z.string() }),
+      ])).optional(),
+    }).default({}),
 })
 
 export function registerScrapeRoutes(
