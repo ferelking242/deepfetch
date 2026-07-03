@@ -25,7 +25,7 @@ export class GenericAdapter implements PlatformAdapter {
     const cfg = getConfig()
 
     // Try Jina Reader first for clean text extraction on public pages
-    if (!session) {
+    if (!session && !job.options.actions?.length) {
       try {
         const jinaUrl = `https://r.jina.ai/${encodeURIComponent(job.url)}`
         const res = await fetch(jinaUrl, {
