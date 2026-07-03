@@ -98,7 +98,7 @@ async function main() {
 
   // ── Protected routes
   await fastify.register(async (protected_: any) => {
-    protected_.addHook('preHandler', authMiddleware)
+    protected_.addHook('preHandler', authMiddleware(cfg.server.master_secret))
     registerJobRoutes(protected_, { queue })
     registerScrapeRoutes(protected_, { queue, pool, registry, sessionStore, resources, aiEngine })
     registerBatchRoutes(protected_, { queue, registry, sessionStore })
