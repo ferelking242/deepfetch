@@ -4,6 +4,7 @@
 
 [![Build](https://github.com/ferelking242/deepfetch/actions/workflows/build.yml/badge.svg)](https://github.com/ferelking242/deepfetch/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ferelking242/deepfetch/blob/main/colab/deepfetch.ipynb)
 
 ---
 
@@ -21,6 +22,41 @@ DeepFetch is a self-hosted server that exposes a clean REST + WebSocket API for 
 
 ---
 
+  ## ☁️ Run on Google Colab (Zero Install)
+
+  > **One click** — runs DeepFetch in the cloud, exposes a public HTTPS URL, and gives you a Python agent SDK. No local setup required.
+
+  [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ferelking242/deepfetch/blob/main/colab/deepfetch.ipynb)
+
+  The notebook:
+  1. Installs Node.js 22 + Playwright Chromium automatically (~5 min first run)
+  2. Generates a secure config (master secret + AES-256 session key)
+  3. Starts the DeepFetch server and **creates a public `trycloudflare.com` URL** via cloudflared
+  4. Creates your first API key
+  5. Provides a **`DeepFetchClient`** Python class — drop-in agent SDK
+
+  ```python
+  df = DeepFetchClient(PUBLIC_URL, API_KEY)
+
+  # Any URL — returns structured data + markdown
+  result = df.scrape("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+  print(result.text())           # best text for LLM context
+
+  # Platform-aware: YouTube / TikTok / Reddit / Instagram / generic
+  result = df.scrape_json("https://www.reddit.com/r/MachineLearning/top.json")
+
+  # Batch scrape
+  results = df.batch(["https://a.com", "https://b.com", "https://c.com"])
+
+  # Recursive crawl
+  pages = df.crawl("https://docs.example.com", max_pages=20)
+
+  # System status
+  print(df.health())
+  ```
+
+  ---
+  
 ## Quick Start
 
 ### 1. Clone & configure
