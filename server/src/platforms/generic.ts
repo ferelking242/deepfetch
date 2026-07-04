@@ -4,6 +4,7 @@ import type { AIEngine } from '../ai/AIEngine.js'
 import type { Logger } from 'pino'
 import { runExtractionPipeline } from '../extraction/pipeline.js'
 import { getConfig } from '../config/loader.js'
+import { executeActions } from '../browser/ActionExecutor.js'
 
 export class GenericAdapter implements PlatformAdapter {
   readonly name = 'generic'
@@ -17,14 +18,14 @@ export class GenericAdapter implements PlatformAdapter {
   ) {}
 
   canHandle(_url: string): boolean {
-    return true // always matches as fallback
+    return true
   }
 
   async scrape(ctx: ScrapeContext): Promise<ScrapeResult> {
     const { job, session, logger } = ctx
     const cfg = getConfig()
 
-    // Try Jina Reader first for clean text extraction on public pages
+    // Try Jina Reader first for clean text extraction on public pages (no actions)
     if (!session && !job.options.actions?.length) {
       try {
         const jinaUrl = `https://r.jina.ai/${encodeURIComponent(job.url)}`
@@ -32,7 +33,6 @@ export class GenericAdapter implements PlatformAdapter {
           headers: { 'Accept': 'application/json', 'X-Return-Format': 'json' },
           signal: AbortSignal.timeout(15_000),
         })
-
         if (res.ok) {
           const json = await res.json() as Record<string, unknown>
           logger.info('Generic: extracted via Jina Reader')
@@ -40,7 +40,7 @@ export class GenericAdapter implements PlatformAdapter {
             url: job.url,
             platform: 'generic',
             data: json,
-            extracted_by: 'selectors', // Jina = structured selector-like
+            extracted_by: 'selectors',
             duration_ms: 0,
           }
         }
@@ -49,7 +49,7 @@ export class GenericAdapter implements PlatformAdapter {
       }
     }
 
-    // Playwright fallback
+    // Playwright path
     const context = await this.pool.acquire(session?.cookies)
     try {
       const page = await context.newPage()
@@ -61,35 +61,30 @@ export class GenericAdapter implements PlatformAdapter {
         await page.waitForSelector(job.options.wait_for, { timeout: 10_000 }).catch(() => null)
       }
 
-      if (job.options.scroll) {
+      if (job.options.scroll && !job.options.actions?.length) {
         await autoScroll(page)
-        }
+      }
 
-        // Execute browser actions (fill, click, navigate) before extraction
-        if (job.options.actions?.length) {
-          for (const action of job.options.actions) {
-            if (action.type === 'fill') {
-              await page.fill(action.selector, action.value)
-            } else if (action.type === 'click') {
-              await page.click(action.selector)
-              await page.waitForTimeout(1500)
-            } else if (action.type === 'wait_for_url') {
-              await page.waitForURL(action.pattern, { timeout: 15_000 }).catch(() => null)
-            } else if (action.type === 'wait_for_selector') {
-              await page.waitForSelector(action.selector, { timeout: 10_000 }).catch(() => null)
-            } else if (action.type === 'select') {
-              await page.selectOption(action.selector, action.value)
-            }
-          }
-        }
+      // Execute rich browser actions
+      let actionResults: Record<string, unknown> = {}
+      if (job.options.actions?.length) {
+        actionResults = await executeActions(page, context, job.options.actions, this.aiEngine, logger)
+      }
 
-        const finalUrl = page.url()
-        const { data, extracted_by } = await runExtractionPipeline(page, 'generic', logger, this.aiEngine)
+      const finalUrl = page.url()
+      const { data, extracted_by } = await runExtractionPipeline(page, 'generic', logger, this.aiEngine)
 
-        await page.close()
-        await this.pool.release(context)
+      await page.close()
+      await this.pool.release(context)
 
-        return { url: finalUrl, platform: 'generic', data, extracted_by, duration_ms: 0 }
+      return {
+        url: finalUrl,
+        platform: 'generic',
+        data,
+        extracted_by,
+        action_results: Object.keys(actionResults).length ? actionResults : undefined,
+        duration_ms: 0,
+      }
     } catch (err) {
       await this.pool.release(context)
       throw err
