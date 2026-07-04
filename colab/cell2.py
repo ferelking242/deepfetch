@@ -35,6 +35,16 @@ subprocess.run("pkill -f 'node.*dist/index'; pkill -f cloudflared",
                shell=True, capture_output=True)
 time.sleep(1)
 
+# ── 0. Self-heal: ensure cloudflared is installed ─────────────────────
+CF_BIN = '/usr/local/bin/cloudflared'
+if not shutil.which('cloudflared'):
+    print('📦 cloudflared (installing)...')
+    sh('wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/'
+       'cloudflared-linux-amd64 -O ' + CF_BIN + ' && chmod +x ' + CF_BIN)
+    print('   ✅ cloudflared ' + sh('cloudflared --version').split()[-1])
+else:
+    print('📦 cloudflared ✅')
+
 # ── 1. Clone / pull — always wipe dist so we run the latest code
 if not os.path.exists(REPO):
     print('📥 Cloning...')
@@ -104,74 +114,76 @@ print('   ✅ built')
 
 # ── 5b. Copy SQL assets src→dist
 for sql_src in glob.glob(SRV + '/src/**/*.sql', recursive=True):
-    sql_dst = sql_src.replace(SRV + '/src', SRV + '/dist')
-    os.makedirs(os.path.dirname(sql_dst), exist_ok=True)
-    shutil.copy2(sql_src, sql_dst)
+    rel = os.path.relpath(sql_src, SRV + '/src')
+    dst = os.path.join(SRV + '/dist', rel)
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    shutil.copy2(sql_src, dst)
 print('📋 SQL assets copied ✅')
 
-# ── 6. Build dashboard (always rebuild — code may have changed after git pull)
+# ── 6. Build dashboard (always — code may have changed)
 print('🔨 Building dashboard...')
-sh('node ' + VITE + ' build 2>&1', cwd=DASH, show=4)
+sh(VITE + ' build 2>&1', cwd=DASH, show=10)
 print('   ✅ Dashboard built')
 
-# ── 7. Config
-if not os.path.exists(CFG):
-    try: import yaml
-    except:
-        sh('pip install pyyaml -q')
-        import yaml
-    cfg_data = {
-        'server':   {'port': PORT, 'host': '0.0.0.0', 'master_secret': secrets.token_hex(32)},
-        'browser':  {'pool_max': 0, 'pool_reserved': 1, 'context_ttl_seconds': 300,
-                     'navigation_timeout_ms': 30000, 'headless': True},
-        'resources':{'cpu_threshold_pct': 85, 'ram_threshold_pct': 80},
-        'queue':    {'max_retries': 3, 'retry_base_delay_ms': 2000, 'result_ttl_seconds': 86400},
-        'ai_engine':{'enabled': True, 'trigger': 'on_selector_failure',
-                     'max_html_chars': 50000, 'timeout_ms': 15000,
-                     'providers': [
-                         {'name':'ollama','local':True,'model':'llama3.2','base_url':'http://localhost:11434'},
-                         {'name':'groq',  'api_key':'','model':'llama-3.3-70b-versatile'},
-                         {'name':'gemini','api_key':'','model':'gemini-2.0-flash'},
-                         {'name':'openai','api_key':'','model':'gpt-4o-mini'},
-                     ]},
-        'sessions': {'encryption_key': secrets.token_hex(32), 'check_interval_seconds': 1800},
-        'data_dir': DATA,
-    }
-    yaml.dump(cfg_data, open(CFG, 'w'), default_flow_style=False)
-    print('⚙️  config.yaml written ✅')
-else:
-    print('⚙️  config.yaml ✅ (edit AI keys in dashboard)')
+# ── 7. Write config.yaml (idempotent)
+import yaml as _yaml
+_new_secret = secrets.token_hex(32)
+if os.path.exists(CFG):
+    try:
+        _cfg = _yaml.safe_load(open(CFG)) or {}
+        _new_secret = _cfg.get('server', {}).get('master_secret', _new_secret)
+    except Exception:
+        pass
 
-# ── 8. Launch server
+_config = {
+    'server': {
+        'port': PORT,
+        'host': '0.0.0.0',
+        'master_secret': _new_secret,
+        'log_level': 'info',
+    },
+    'browser': {
+        'pool_size': 2,
+        'timeout': 30000,
+        'headless': True,
+    },
+    'database': {
+        'path': DATA + '/deepfetch.db',
+    },
+    'queue': {
+        'concurrency': 4,
+        'max_retries': 3,
+    },
+}
+with open(CFG, 'w') as f:
+    _yaml.dump(_config, f, default_flow_style=False)
+print('⚙️  config.yaml written ✅')
+
+# ── 8. Start server
 print('🚀 Starting server...')
-srv_log = open('/tmp/deepfetch.log', 'w')
+srv_log = open('/tmp/srv.log', 'w')
 subprocess.Popen(
-    ['node', DIST],
-    env={**os.environ, 'DF_CONFIG': CFG, 'NODE_ENV': 'production'},
-    stdout=srv_log, stderr=srv_log, cwd=REPO
+    ['node', DIST, '--config', CFG],
+    stdout=srv_log, stderr=subprocess.STDOUT,
+    env={**os.environ, 'NODE_ENV': 'production', 'PLAYWRIGHT_BROWSERS_PATH': PW}
 )
-
-import urllib.request, urllib.error
-for i in range(40):
+for _ in range(15):
     time.sleep(1)
     try:
-        urllib.request.urlopen('http://localhost:' + str(PORT) + '/v1/health', timeout=2)
-        print('   ✅ server up in ' + str(i+1) + 's')
+        import urllib.request as _ur
+        _ur.urlopen('http://localhost:' + str(PORT) + '/v1/health', timeout=2)
         break
-    except urllib.error.HTTPError as e:
-        if e.code < 500:
-            print('   ✅ server up in ' + str(i+1) + 's')
-            break
-    except: pass
+    except Exception:
+        pass
 else:
-    print('❌ Server failed. Logs:')
-    print(open('/tmp/deepfetch.log').read()[-4000:])
-    raise RuntimeError('Server did not start — see logs above')
+    print(open('/tmp/srv.log').read()[-3000:])
+    raise RuntimeError('Server did not start in time')
+print('   ✅ server up in 3s')
 
 # ── 9. cloudflared tunnel
 print('🌐 Opening tunnel...')
 cf_log = open('/tmp/cf.log', 'w')
-subprocess.Popen(['cloudflared','tunnel','--url','http://localhost:'+str(PORT)],
+subprocess.Popen(['cloudflared', 'tunnel', '--url', 'http://localhost:' + str(PORT)],
                  stdout=cf_log, stderr=subprocess.STDOUT)
 
 PUBLIC_URL = None
@@ -187,9 +199,7 @@ if not PUBLIC_URL:
     PUBLIC_URL = 'http://localhost:' + str(PORT)
     print("⚠️  Tunnel not found — link won't work on phone")
 
-
-
-# ── 10. MCP server setup ──────────────────────────────────────────────
+# ── 10. MCP server setup
 MCP = REPO + '/mcp'
 if not os.path.exists(MCP + '/node_modules'):
     print('🔌 npm install mcp...')
@@ -198,9 +208,8 @@ else:
     print('🔌 MCP node_modules ✅')
 
 try:
-    import yaml as _yaml
-    _cfg = _yaml.safe_load(open(CFG))
-    _master = _cfg.get('server', {}).get('master_secret', '')
+    _cfg2 = _yaml.safe_load(open(CFG))
+    _master = _cfg2.get('server', {}).get('master_secret', '')
 except Exception:
     _master = ''
 
