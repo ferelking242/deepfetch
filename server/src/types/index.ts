@@ -4,6 +4,17 @@ export type JobStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled'
 export type JobPriority = 'high' | 'normal' | 'batch'
 export type OutputFormat = 'json' | 'markdown' | 'html' | 'screenshot'
 export type ExtractionTrigger = 'on_selector_failure' | 'always' | 'never'
+export type VideoQuality = '360p' | '480p' | '720p' | '1080p' | '2k' | '4k'
+export type ScreenshotFormat = 'png' | 'jpeg' | 'webp'
+
+export const VIDEO_RESOLUTIONS: Record<VideoQuality, { width: number; height: number }> = {
+  '360p':  { width: 640,  height: 360  },
+  '480p':  { width: 854,  height: 480  },
+  '720p':  { width: 1280, height: 720  },
+  '1080p': { width: 1920, height: 1080 },
+  '2k':    { width: 2560, height: 1440 },
+  '4k':    { width: 3840, height: 2160 },
+}
 
 // ─── Browser Actions ─────────────────────────────────────────────────────────
 
@@ -19,7 +30,7 @@ export type ActionFocus          = { type: 'focus';          selector: string }
 export type ActionClear          = { type: 'clear';          selector: string }
 export type ActionHover          = { type: 'hover';          selector: string }
 export type ActionDrag           = { type: 'drag';           source: string; target: string }
-export type ActionUploadFile     = { type: 'upload_file';    selector: string; files: string[] }  // base64 data URIs or http URLs
+export type ActionUploadFile     = { type: 'upload_file';    selector: string; files: string[] }
 
 /** Navigation */
 export type ActionGoto           = { type: 'goto';           url: string; wait_until?: 'load' | 'domcontentloaded' | 'networkidle' }
@@ -51,7 +62,20 @@ export type ActionSetCookie      = { type: 'set_cookie';     name: string; value
 export type ActionClearCookies   = { type: 'clear_cookies' }
 
 /** Mid-action Capture */
-export type ActionScreenshot     = { type: 'screenshot';     selector?: string; full_page?: boolean; as?: string }
+export type ActionScreenshot     = {
+  type: 'screenshot'
+  selector?: string
+  full_page?: boolean
+  as?: string
+  // Resolution control
+  width?: number
+  height?: number
+  // Format & quality
+  format?: ScreenshotFormat
+  quality?: number   // 0–100, jpeg/webp only
+  // Preset shorthand
+  resolution?: VideoQuality
+}
 export type ActionGetText        = { type: 'get_text';       selector: string; as?: string }
 export type ActionGetAttribute   = { type: 'get_attribute';  selector: string; attribute: string; as?: string }
 export type ActionGetValue       = { type: 'get_value';      selector: string; as?: string }
@@ -77,6 +101,17 @@ export type BrowserAction =
   | ActionScreenshot | ActionGetText | ActionGetAttribute | ActionGetValue
   | ActionBlockResources | ActionSetHeaders
   | ActionSolveCaptcha | ActionHumanizeMouse
+
+// ─── Video Recording Options ──────────────────────────────────────────────────
+
+export interface RecordVideoOptions {
+  /** Quality preset — controls resolution */
+  quality?: VideoQuality
+  /** Custom width (overrides quality preset) */
+  width?: number
+  /** Custom height (overrides quality preset) */
+  height?: number
+}
 
 // ─── Job ────────────────────────────────────────────────────────────────────
 
@@ -106,6 +141,7 @@ export interface ScrapeOptions {
   crawl_depth?: number
   crawl_limit?: number
   actions?: BrowserAction[]
+  record_video?: RecordVideoOptions | boolean
 }
 
 export interface ScrapeResult {
@@ -115,7 +151,9 @@ export interface ScrapeResult {
   markdown?: string
   html?: string
   screenshot_path?: string
-  action_results?: Record<string, unknown>  // named results from get_text / evaluate / etc.
+  video_path?: string
+  video_size_bytes?: number
+  action_results?: Record<string, unknown>
   extracted_by: 'selectors' | 'blob' | 'ai' | 'zeusdl'
   duration_ms: number
 }

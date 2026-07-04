@@ -323,15 +323,48 @@ async function runAction(
     // ── Mid-action Capture ───────────────────────────────────────────────────
 
     case 'screenshot': {
-      const dest = join(tmpdir(), `action-screenshot-${randomUUID()}.png`)
+      // Resolve format
+      const fmt = (action.format ?? 'png') as 'png' | 'jpeg' | 'webp'
+      const quality = fmt !== 'png' ? (action.quality ?? 85) : undefined
+
+      // Resolve resolution: explicit w/h > preset > current viewport
+      const RES: Record<string, { width: number; height: number }> = {
+        '360p':  { width: 640,  height: 360  },
+        '480p':  { width: 854,  height: 480  },
+        '720p':  { width: 1280, height: 720  },
+        '1080p': { width: 1920, height: 1080 },
+        '2k':    { width: 2560, height: 1440 },
+        '4k':    { width: 3840, height: 2160 },
+      }
+      const targetSize = action.width && action.height
+        ? { width: action.width, height: action.height }
+        : action.resolution
+          ? RES[action.resolution]
+          : null
+
+      // Temporarily resize viewport if a custom size was requested
+      const originalVp = page.viewportSize()
+      if (targetSize) await page.setViewportSize(targetSize)
+
+      const dest = join(tmpdir(), `action-screenshot-${randomUUID()}.${fmt}`)
       if (action.selector) {
         const el = page.locator(action.selector).first()
-        await el.screenshot({ path: dest }).catch(() => null)
+        await el.screenshot({ path: dest, type: fmt, quality }).catch(() => null)
       } else {
-        await page.screenshot({ path: dest, fullPage: action.full_page ?? false })
+        await page.screenshot({
+          path: dest,
+          type: fmt,
+          quality,
+          fullPage: action.full_page ?? false,
+        })
       }
+
+      // Restore viewport
+      if (targetSize && originalVp) await page.setViewportSize(originalVp)
+
       const key = action.as ?? `screenshot_${Date.now()}`
       results[key] = dest
+      logger.debug({ key, dest, fmt, size: targetSize }, 'Screenshot captured')
       break
     }
 

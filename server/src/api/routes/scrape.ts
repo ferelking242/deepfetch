@@ -176,11 +176,20 @@ const SetCookieAction = z.object({
 const ClearCookiesAction = z.object({ type: z.literal('clear_cookies') })
 
 // Mid-action Capture
+const VideoQualityEnum = z.enum(['360p', '480p', '720p', '1080p', '2k', '4k'])
+
 const ScreenshotAction = z.object({
   type: z.literal('screenshot'),
   selector: z.string().optional(),
   full_page: z.boolean().optional(),
   as: z.string().optional(),
+  // Resolution
+  resolution: VideoQualityEnum.optional(),
+  width: z.number().int().min(1).max(7680).optional(),
+  height: z.number().int().min(1).max(4320).optional(),
+  // Format & quality
+  format: z.enum(['png', 'jpeg', 'webp']).optional(),
+  quality: z.number().int().min(0).max(100).optional(),
 })
 
 const GetTextAction = z.object({
@@ -257,6 +266,14 @@ const ScrapeBodySchema = z.object({
     wait_for: z.string().optional(),
     timeout_ms: z.number().int().min(1000).max(120_000).optional(),
     actions: z.array(ActionSchema).optional(),
+    record_video: z.union([
+      z.boolean(),
+      z.object({
+        quality: VideoQualityEnum.optional(),
+        width:   z.number().int().min(320).max(7680).optional(),
+        height:  z.number().int().min(240).max(4320).optional(),
+      }),
+    ]).optional(),
   }).default({}),
 })
 

@@ -2,6 +2,7 @@ import type { PlatformAdapter, ScrapeContext, ScrapeResult } from '../types/inde
 import type { BrowserPool } from '../core/BrowserPool.js'
 import type { AIEngine } from '../ai/AIEngine.js'
 import type { Logger } from 'pino'
+import { stat } from 'node:fs/promises'
 import { runExtractionPipeline } from '../extraction/pipeline.js'
 import { getConfig } from '../config/loader.js'
 import { executeActions } from '../browser/ActionExecutor.js'
@@ -25,8 +26,8 @@ export class GenericAdapter implements PlatformAdapter {
     const { job, session, logger } = ctx
     const cfg = getConfig()
 
-    // Try Jina Reader first for clean text extraction on public pages (no actions)
-    if (!session && !job.options.actions?.length) {
+    // Jina Reader fast path — only when no actions and no recording
+    if (!session && !job.options.actions?.length && !job.options.record_video) {
       try {
         const jinaUrl = `https://r.jina.ai/${encodeURIComponent(job.url)}`
         const res = await fetch(jinaUrl, {
@@ -36,13 +37,7 @@ export class GenericAdapter implements PlatformAdapter {
         if (res.ok) {
           const json = await res.json() as Record<string, unknown>
           logger.info('Generic: extracted via Jina Reader')
-          return {
-            url: job.url,
-            platform: 'generic',
-            data: json,
-            extracted_by: 'selectors',
-            duration_ms: 0,
-          }
+          return { url: job.url, platform: 'generic', data: json, extracted_by: 'selectors', duration_ms: 0 }
         }
       } catch (err) {
         logger.debug({ err }, 'Jina Reader failed, falling back to Playwright')
@@ -50,8 +45,10 @@ export class GenericAdapter implements PlatformAdapter {
     }
 
     // Playwright path
-    const context = await this.pool.acquire(session?.cookies)
+    const recording = job.options.record_video
+    const context = await this.pool.acquire({ cookies: session?.cookies, recordVideo: recording || undefined })
     let page: import('playwright').Page | null = null
+
     try {
       page = await context.newPage()
       page.setDefaultTimeout(cfg.browser.navigation_timeout_ms)
@@ -66,7 +63,6 @@ export class GenericAdapter implements PlatformAdapter {
         await autoScroll(page)
       }
 
-      // Execute rich browser actions
       let actionResults: Record<string, unknown> = {}
       if (job.options.actions?.length) {
         actionResults = await executeActions(page, context, job.options.actions, this.aiEngine, logger)
@@ -75,12 +71,30 @@ export class GenericAdapter implements PlatformAdapter {
       const finalUrl = page.url()
       const { data, extracted_by } = await runExtractionPipeline(page, 'generic', logger, this.aiEngine)
 
+      // Get video path before closing (Playwright finalises .webm on page close)
+      const videoBefore = page.video()
+      await page.close()
+      page = null
+
+      let video_path: string | undefined
+      let video_size_bytes: number | undefined
+      if (recording && videoBefore) {
+        video_path = await videoBefore.path().catch(() => undefined)
+        if (video_path) {
+          const st = await stat(video_path).catch(() => null)
+          video_size_bytes = st?.size
+          logger.info({ video_path, video_size_bytes }, 'Recording saved')
+        }
+      }
+
       return {
         url: finalUrl,
         platform: 'generic',
         data,
         extracted_by,
-        action_results: Object.keys(actionResults).length ? actionResults : undefined,
+        action_results:   Object.keys(actionResults).length ? actionResults : undefined,
+        video_path,
+        video_size_bytes,
         duration_ms: 0,
       }
     } finally {
