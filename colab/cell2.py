@@ -64,6 +64,11 @@ if not os.path.exists(TSC):
 else:
     print('📦 server node_modules ✅')
 
+# ── 2c. Rebuild native addons for current Node ABI (fixes better-sqlite3 after Node upgrade)
+print('🔧 Rebuilding native addons...')
+sh('npm rebuild better-sqlite3 2>&1 | tail -4', cwd=SRV, show=4)
+print('   ✅ native addon OK')
+
 # ── 3. npm install dashboard
 if not os.path.exists(DASH + '/node_modules/.bin/vite'):
     if os.path.exists(DASH + '/node_modules'):
@@ -104,13 +109,10 @@ for sql_src in glob.glob(SRV + '/src/**/*.sql', recursive=True):
     shutil.copy2(sql_src, sql_dst)
 print('📋 SQL assets copied ✅')
 
-# ── 6. Build dashboard
-if not os.path.exists(DASH + '/dist/index.html'):
-    print('🔨 Building dashboard...')
-    sh('node ' + VITE + ' build 2>&1', cwd=DASH, show=4)
-    print('   ✅ built')
-else:
-    print('🔨 Dashboard ✅')
+# ── 6. Build dashboard (always rebuild — code may have changed after git pull)
+print('🔨 Building dashboard...')
+sh('node ' + VITE + ' build 2>&1', cwd=DASH, show=4)
+print('   ✅ Dashboard built')
 
 # ── 7. Config
 if not os.path.exists(CFG):

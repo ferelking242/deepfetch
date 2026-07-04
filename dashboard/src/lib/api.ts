@@ -1,4 +1,4 @@
-const BASE = ''  // same-origin when served by the backend
+const BASE = ''
 
 async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
   const apiKey = localStorage.getItem('deepfetch_api_key') ?? ''
@@ -6,7 +6,7 @@ async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
     ...opts,
     headers: {
       'Content-Type': 'application/json',
-      ...(apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {}),
+      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
       ...(opts?.headers ?? {}),
     },
   })
@@ -34,10 +34,16 @@ export const cancelJob = (id: string) => apiFetch<{ message: string }>(`/v1/jobs
 export const scrape = (body: ScrapeRequest) =>
   apiFetch<ScrapeResponse>('/v1/scrape', { method: 'POST', body: JSON.stringify(body) })
 
+// ─── Crawl ────────────────────────────────────────────────────────────────────
+export const crawl = (body: CrawlRequest) =>
+  apiFetch<CrawlResponse>('/v1/crawl', { method: 'POST', body: JSON.stringify(body) })
+
+// ─── Batch ────────────────────────────────────────────────────────────────────
+export const batch = (body: BatchRequest) =>
+  apiFetch<BatchResponse>('/v1/batch', { method: 'POST', body: JSON.stringify(body) })
+
 // ─── Sessions ─────────────────────────────────────────────────────────────────
 export const listSessions = () => apiFetch<{ sessions: SessionSummary[] }>('/v1/sessions')
-export const createSessionCookies = (body: CreateCookieSession) =>
-  apiFetch<{ id: string }>('/v1/sessions', { method: 'POST', body: JSON.stringify(body) })
 export const createSessionCredentials = (body: CreateCredSession) =>
   apiFetch<{ id: string }>('/v1/sessions', { method: 'POST', body: JSON.stringify(body) })
 export const checkSession = (id: string) => apiFetch<{ id: string; valid: boolean; status: string }>(`/v1/sessions/${id}/check`)
@@ -105,16 +111,43 @@ export interface ScrapeRequest {
   priority?: 'high' | 'normal' | 'batch'
   sync?: boolean
   output?: string[]
-  options?: { max_comments?: number; scroll?: boolean; wait_for?: string }
+  options?: {
+    max_comments?: number
+    scroll?: boolean
+    wait_for?: string
+    timeout_ms?: number
+    actions?: BrowserAction[]
+  }
 }
 export interface ScrapeResponse { job_id: string; status: string; platform?: string }
 
-export interface CreateCookieSession {
-  type: 'cookies'
-  platform: string
-  label: string
-  cookies: Array<{ name: string; value: string; domain: string; path: string }>
+export interface CrawlRequest {
+  url: string
+  depth?: number
+  limit?: number
+  same_domain?: boolean
+  exclude_patterns?: string[]
+  output?: string[]
+  priority?: 'high' | 'normal' | 'batch'
 }
+export interface CrawlResponse { job_id: string; seed_url: string; config: Record<string, unknown>; message: string }
+
+export interface BatchRequest {
+  urls: string[]
+  session_id?: string
+  priority?: 'high' | 'normal' | 'batch'
+  output?: string[]
+  options?: { max_comments?: number; scroll?: boolean; timeout_ms?: number }
+}
+export interface BatchResponse { job_ids: string[]; count: number; message: string }
+
+export interface BrowserAction {
+  type: 'fill' | 'click' | 'wait_for_url' | 'wait_for_selector' | 'select'
+  selector?: string
+  value?: string
+  pattern?: string
+}
+
 export interface CreateCredSession {
   type: 'credentials'
   platform: string
@@ -122,28 +155,3 @@ export interface CreateCredSession {
   password: string
   label?: string
 }
-
-// ─── Crawl ────────────────────────────────────────────────────────────────────
-export interface CrawlRequest {
-  url: string
-  max_depth?: number
-  max_pages?: number
-  include_patterns?: string[]
-  exclude_patterns?: string[]
-  output?: string[]
-}
-export interface CrawlResponse { job_id: string; status: string }
-
-export const crawl = (body: CrawlRequest) =>
-  apiFetch<CrawlResponse>('/v1/crawl', { method: 'POST', body: JSON.stringify(body) })
-
-// ─── Batch ────────────────────────────────────────────────────────────────────
-export interface BatchRequest {
-  requests: Array<{ url: string; output?: string[]; options?: Record<string, unknown> }>
-  priority?: 'high' | 'normal' | 'batch'
-}
-export interface BatchResponse { job_ids: string[]; count: number }
-
-export const batch = (body: BatchRequest) =>
-  apiFetch<BatchResponse>('/v1/batch', { method: 'POST', body: JSON.stringify(body) })
-

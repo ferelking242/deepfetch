@@ -1,88 +1,75 @@
 import { useState, useRef } from 'react'
-import { scrape, crawl, batch } from '../lib/api.ts'
-import { Play, Loader, Copy, Check, ChevronDown, ChevronRight, Zap, Globe, Layers } from 'lucide-react'
-import clsx from 'clsx'
-import type { ScrapeRequest, CrawlRequest, BatchRequest } from '../lib/api.ts'
+import { scrape, crawl, batch } from '@/lib/api'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Separator } from '@/components/ui/separator'
+import {
+  Play, Loader2, Copy, Check, ChevronDown, ChevronRight,
+  Zap, Globe, Layers, Clock, CheckCircle2, AlertCircle
+} from 'lucide-react'
+import { cn, fmtDuration } from '@/lib/utils'
+import type { ScrapeRequest, CrawlRequest, BatchRequest } from '@/lib/api'
 
-type Mode = 'scrape' | 'crawl' | 'batch'
 type OutputFmt = 'markdown' | 'json' | 'html' | 'screenshot'
+const OUTPUT_FMTS: OutputFmt[] = ['markdown', 'json', 'html', 'screenshot']
 
-const MODES: { id: Mode; icon: typeof Zap; label: string; desc: string }[] = [
-  { id: 'scrape', icon: Zap,    label: 'Scrape',  desc: 'Single URL — text, data, screenshot' },
-  { id: 'crawl',  icon: Globe,  label: 'Crawl',   desc: 'Follow links from a starting URL' },
-  { id: 'batch',  icon: Layers, label: 'Batch',   desc: 'Multiple URLs in parallel' },
-]
-
-function JsonViewer({ data }: { data: unknown }) {
-  const [expanded, setExpanded] = useState(true)
-  const text = JSON.stringify(data, null, 2)
+function ToggleChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
-    <div className="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden">
-      <button
-        onClick={() => setExpanded(e => !e)}
-        className="flex items-center gap-2 px-4 py-2.5 w-full text-left text-xs text-gray-400 hover:text-gray-200 border-b border-gray-800 transition-colors"
-      >
-        {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-        JSON Response
-      </button>
-      {expanded && (
-        <pre className="p-4 text-xs text-gray-300 overflow-auto max-h-96 leading-relaxed">
-          {text}
-        </pre>
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'h-7 px-3 rounded-md text-xs font-medium border transition-colors',
+        active
+          ? 'bg-primary/10 border-primary/30 text-primary'
+          : 'bg-transparent border-border text-muted-foreground hover:text-foreground hover:border-border/80'
       )}
-    </div>
-  )
-}
-
-function MarkdownViewer({ content }: { content: string }) {
-  const [expanded, setExpanded] = useState(true)
-  return (
-    <div className="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden">
-      <button
-        onClick={() => setExpanded(e => !e)}
-        className="flex items-center gap-2 px-4 py-2.5 w-full text-left text-xs text-gray-400 hover:text-gray-200 border-b border-gray-800 transition-colors"
-      >
-        {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-        Markdown Output
-      </button>
-      {expanded && (
-        <pre className="p-4 text-xs text-gray-300 overflow-auto max-h-96 leading-relaxed whitespace-pre-wrap">
-          {content}
-        </pre>
-      )}
-    </div>
-  )
-}
-
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false)
-  const copy = () => {
-    void navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
-  }
-  return (
-    <button onClick={copy} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-cyan-400 transition-colors px-2 py-1 rounded-md hover:bg-gray-800">
-      {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
-      {copied ? 'Copied' : 'Copy'}
+    >
+      {label}
     </button>
   )
 }
 
-function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <label className="block text-xs text-muted-foreground mb-1.5 font-medium">{children}</label>
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  const copy = () => { void navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500) }
   return (
-    <div>
-      <label className="text-xs text-gray-500 mb-1.5 block">{label}</label>
-      {children}
+    <Button variant="ghost" size="sm" onClick={copy} className={cn('h-7 gap-1.5 text-xs', copied ? 'text-emerald-500' : 'text-muted-foreground')}>
+      {copied ? <Check size={11} /> : <Copy size={11} />}
+      {copied ? 'Copied' : 'Copy'}
+    </Button>
+  )
+}
+
+function CollapsibleBlock({ title, children }: { title: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(true)
+  return (
+    <div className="rounded-lg border border-border overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 w-full px-4 py-2.5 text-xs text-muted-foreground hover:text-foreground bg-muted/30 border-b border-border transition-colors"
+      >
+        {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        {title}
+      </button>
+      {open && (
+        <pre className="p-4 text-xs font-mono text-foreground overflow-auto max-h-80 bg-background/50 leading-relaxed">
+          {children}
+        </pre>
+      )}
     </div>
   )
 }
 
-const inputCls = 'w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-cyan-600 transition-colors'
-const selectCls = 'bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-cyan-600 transition-colors'
-
 export default function Playground() {
-  const [mode, setMode] = useState<Mode>('scrape')
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<unknown>(null)
   const [error, setError] = useState<string | null>(null)
@@ -102,23 +89,20 @@ export default function Playground() {
   const [crawlUrl, setCrawlUrl] = useState('')
   const [crawlDepth, setCrawlDepth] = useState(2)
   const [crawlLimit, setCrawlLimit] = useState(20)
-  const [crawlPatterns, setCrawlPatterns] = useState('')
+  const [crawlSameDomain, setCrawlSameDomain] = useState(true)
+  const [crawlExclude, setCrawlExclude] = useState('')
 
   // Batch state
   const [batchUrls, setBatchUrls] = useState('')
   const [batchOutput, setBatchOutput] = useState<OutputFmt[]>(['markdown'])
+  const [batchPriority, setBatchPriority] = useState<'high' | 'normal' | 'batch'>('batch')
 
-  const toggleOutput = (fmt: OutputFmt, list: OutputFmt[], setList: (v: OutputFmt[]) => void) => {
-    setList(list.includes(fmt) ? list.filter(f => f !== fmt) : [...list, fmt])
-  }
+  const toggleFmt = (fmt: OutputFmt, list: OutputFmt[], setter: (v: OutputFmt[]) => void) =>
+    setter(list.includes(fmt) ? list.filter(f => f !== fmt) : [...list, fmt])
 
-  const run = async () => {
-    setRunning(true)
-    setResult(null)
-    setError(null)
-    setDuration(null)
+  const run = async (mode: string) => {
+    setRunning(true); setResult(null); setError(null); setDuration(null)
     const t0 = Date.now()
-
     try {
       let res: unknown
       if (mode === 'scrape') {
@@ -133,29 +117,33 @@ export default function Playground() {
           },
         }
         if (scrapeActions.trim()) {
-          try { (body as Record<string, unknown>).actions = JSON.parse(scrapeActions) }
-          catch { throw new Error('Actions JSON invalide') }
+          try {
+            body.options = { ...body.options, actions: JSON.parse(scrapeActions) }
+          } catch { throw new Error('Actions: invalid JSON') }
         }
         res = await scrape(body)
       } else if (mode === 'crawl') {
         const body: CrawlRequest = {
           url: crawlUrl,
-          max_depth: crawlDepth,
-          max_pages: crawlLimit,
-          ...(crawlPatterns.trim() ? { include_patterns: crawlPatterns.split('\n').map(s => s.trim()).filter(Boolean) } : {}),
+          depth: crawlDepth,
+          limit: crawlLimit,
+          same_domain: crawlSameDomain,
+          ...(crawlExclude.trim() ? { exclude_patterns: crawlExclude.split('\n').map(s => s.trim()).filter(Boolean) } : {}),
         }
         res = await crawl(body)
       } else {
         const urls = batchUrls.split('\n').map(s => s.trim()).filter(Boolean)
-        if (!urls.length) throw new Error('Entrez au moins une URL')
+        if (!urls.length) throw new Error('Enter at least one URL')
         const body: BatchRequest = {
-          requests: urls.map(url => ({ url, output: batchOutput.length ? batchOutput : ['markdown'] })),
+          urls,
+          priority: batchPriority,
+          output: batchOutput.length ? batchOutput : ['markdown'],
         }
         res = await batch(body)
       }
       setResult(res)
       setDuration(Date.now() - t0)
-      setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
+      setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -163,238 +151,235 @@ export default function Playground() {
     }
   }
 
-  const canRun = !running && (
-    (mode === 'scrape' && scrapeUrl.trim().length > 0) ||
-    (mode === 'crawl' && crawlUrl.trim().length > 0) ||
-    (mode === 'batch' && batchUrls.trim().length > 0)
-  )
-
-  const outputFmts: OutputFmt[] = ['markdown', 'json', 'html', 'screenshot']
-
   return (
-    <div className="p-6 space-y-5 max-w-4xl">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">Playground</h1>
-          <p className="text-xs text-gray-500 mt-0.5">Tester l'API DeepFetch en direct depuis le dashboard</p>
-        </div>
+    <div className="p-6 space-y-5 max-w-4xl animate-fade-in">
+      <div>
+        <h1 className="text-base font-semibold">Playground</h1>
+        <p className="text-xs text-muted-foreground mt-0.5">Test the DeepFetch API interactively</p>
       </div>
 
-      {/* Mode selector */}
-      <div className="flex gap-2">
-        {MODES.map(({ id, icon: Icon, label, desc }) => (
-          <button
-            key={id}
-            onClick={() => { setMode(id); setResult(null); setError(null) }}
-            className={clsx(
-              'flex-1 flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all',
-              mode === id
-                ? 'bg-cyan-950/40 border-cyan-700 text-cyan-300'
-                : 'bg-gray-900 border-gray-800 text-gray-400 hover:border-gray-700 hover:text-gray-300'
-            )}
-          >
-            <Icon size={15} className="mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-sm font-medium">{label}</p>
-              <p className="text-xs opacity-70 mt-0.5">{desc}</p>
-            </div>
-          </button>
-        ))}
-      </div>
+      <Tabs defaultValue="scrape">
+        <TabsList className="mb-1">
+          <TabsTrigger value="scrape" className="gap-2"><Zap size={12} />Scrape</TabsTrigger>
+          <TabsTrigger value="crawl" className="gap-2"><Globe size={12} />Crawl</TabsTrigger>
+          <TabsTrigger value="batch" className="gap-2"><Layers size={12} />Batch</TabsTrigger>
+        </TabsList>
 
-      {/* Scrape form */}
-      {mode === 'scrape' && (
-        <div className="card space-y-4">
-          <FieldRow label="URL *">
-            <input
-              type="url"
-              value={scrapeUrl}
-              onChange={e => setScrapeUrl(e.target.value)}
-              placeholder="https://example.com"
-              className={inputCls}
-            />
-          </FieldRow>
-
-          <div className="grid grid-cols-2 gap-4">
-            <FieldRow label="Mode d'exécution">
-              <div className="flex gap-2">
-                {(['high', 'normal', 'batch'] as const).map(p => (
-                  <button
-                    key={p}
-                    onClick={() => setScrapePriority(p)}
-                    className={clsx(
-                      'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
-                      scrapePriority === p ? 'bg-cyan-700 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                    )}
-                  >{p}</button>
-                ))}
+        {/* ─── SCRAPE ─── */}
+        <TabsContent value="scrape">
+          <Card>
+            <CardHeader>
+              <CardTitle>Scrape a URL</CardTitle>
+              <CardDescription>Extract content, data, or screenshots from any page.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <FieldLabel>URL *</FieldLabel>
+                <Input
+                  type="url"
+                  placeholder="https://example.com"
+                  value={scrapeUrl}
+                  onChange={e => setScrapeUrl(e.target.value)}
+                />
               </div>
-            </FieldRow>
-            <FieldRow label="Format de sortie">
-              <div className="flex gap-2 flex-wrap">
-                {outputFmts.map(fmt => (
-                  <button
-                    key={fmt}
-                    onClick={() => toggleOutput(fmt, scrapeOutput, setScrapeOutput)}
-                    className={clsx(
-                      'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
-                      scrapeOutput.includes(fmt) ? 'bg-cyan-700 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                    )}
-                  >{fmt}</button>
-                ))}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <FieldLabel>Priority</FieldLabel>
+                  <div className="flex gap-1.5">
+                    {(['high', 'normal', 'batch'] as const).map(p => (
+                      <ToggleChip key={p} label={p} active={scrapePriority === p} onClick={() => setScrapePriority(p)} />
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <FieldLabel>Output formats</FieldLabel>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {OUTPUT_FMTS.map(f => (
+                      <ToggleChip key={f} label={f} active={scrapeOutput.includes(f)}
+                        onClick={() => toggleFmt(f, scrapeOutput, setScrapeOutput)} />
+                    ))}
+                  </div>
+                </div>
               </div>
-            </FieldRow>
-          </div>
 
-          <div className="flex items-center gap-6 text-sm text-gray-400">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input type="checkbox" checked={scrapeSync} onChange={e => setScrapeSync(e.target.checked)} className="accent-cyan-500" />
-              Synchrone (attend le résultat)
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input type="checkbox" checked={scrapeScroll} onChange={e => setScrapeScroll(e.target.checked)} className="accent-cyan-500" />
-              Scroll automatique
-            </label>
-          </div>
+              <div className="flex items-center gap-5">
+                <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+                  <input type="checkbox" checked={scrapeSync} onChange={e => setScrapeSync(e.target.checked)} className="accent-primary" />
+                  Sync (wait for result)
+                </label>
+                <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+                  <input type="checkbox" checked={scrapeScroll} onChange={e => setScrapeScroll(e.target.checked)} className="accent-primary" />
+                  Auto-scroll
+                </label>
+              </div>
 
-          <FieldRow label="Wait for selector (optionnel)">
-            <input
-              type="text"
-              value={scrapeWaitFor}
-              onChange={e => setScrapeWaitFor(e.target.value)}
-              placeholder=".content, #app, [data-loaded]"
-              className={inputCls}
-            />
-          </FieldRow>
+              <div>
+                <FieldLabel>Wait for selector <span className="font-normal text-muted-foreground/70">(optional)</span></FieldLabel>
+                <Input placeholder="#content, .app, [data-loaded]" value={scrapeWaitFor} onChange={e => setScrapeWaitFor(e.target.value)} />
+              </div>
 
-          <FieldRow label='Actions browser JSON (optionnel — fill/click/wait/select)'>
-            <textarea
-              value={scrapeActions}
-              onChange={e => setScrapeActions(e.target.value)}
-              rows={3}
-              placeholder={`[{"type":"fill","selector":"#search","value":"deepfetch"},{"type":"click","selector":"button[type=submit]"}]`}
-              className={clsx(inputCls, 'font-mono text-xs resize-none')}
-            />
-          </FieldRow>
-        </div>
-      )}
+              <div>
+                <FieldLabel>Browser actions JSON <span className="font-normal text-muted-foreground/70">(optional — fill / click / wait_for_selector / select)</span></FieldLabel>
+                <Textarea
+                  rows={3}
+                  placeholder={`[{"type":"fill","selector":"#q","value":"deepfetch"},{"type":"click","selector":"button[type=submit]"}]`}
+                  value={scrapeActions}
+                  onChange={e => setScrapeActions(e.target.value)}
+                  className="font-mono text-xs"
+                />
+              </div>
 
-      {/* Crawl form */}
-      {mode === 'crawl' && (
-        <div className="card space-y-4">
-          <FieldRow label="URL de départ *">
-            <input
-              type="url"
-              value={crawlUrl}
-              onChange={e => setCrawlUrl(e.target.value)}
-              placeholder="https://docs.example.com"
-              className={inputCls}
-            />
-          </FieldRow>
-          <div className="grid grid-cols-2 gap-4">
-            <FieldRow label="Profondeur max">
-              <input
-                type="number"
-                min={1}
-                max={10}
-                value={crawlDepth}
-                onChange={e => setCrawlDepth(Number(e.target.value))}
-                className={clsx(inputCls, 'w-24')}
-              />
-            </FieldRow>
-            <FieldRow label="Pages max">
-              <input
-                type="number"
-                min={1}
-                max={500}
-                value={crawlLimit}
-                onChange={e => setCrawlLimit(Number(e.target.value))}
-                className={clsx(inputCls, 'w-24')}
-              />
-            </FieldRow>
-          </div>
-          <FieldRow label="Patterns d'inclusion (optionnel, une regex par ligne)">
-            <textarea
-              value={crawlPatterns}
-              onChange={e => setCrawlPatterns(e.target.value)}
-              rows={3}
-              placeholder="/docs/*&#10;/blog/*"
-              className={clsx(inputCls, 'font-mono text-xs resize-none')}
-            />
-          </FieldRow>
-        </div>
-      )}
+              <Button
+                onClick={() => void run('scrape')}
+                disabled={running || !scrapeUrl.trim()}
+                className="gap-2"
+              >
+                {running ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+                {running ? 'Running…' : 'Run scrape'}
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      {/* Batch form */}
-      {mode === 'batch' && (
-        <div className="card space-y-4">
-          <FieldRow label="URLs (une par ligne) *">
-            <textarea
-              value={batchUrls}
-              onChange={e => setBatchUrls(e.target.value)}
-              rows={6}
-              placeholder={`https://example.com\nhttps://github.com/ferelking242/deepfetch\nhttps://news.ycombinator.com`}
-              className={clsx(inputCls, 'font-mono text-xs resize-none')}
-            />
-          </FieldRow>
-          <FieldRow label="Format de sortie">
-            <div className="flex gap-2 flex-wrap">
-              {outputFmts.map(fmt => (
-                <button
-                  key={fmt}
-                  onClick={() => toggleOutput(fmt, batchOutput, setBatchOutput)}
-                  className={clsx(
-                    'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
-                    batchOutput.includes(fmt) ? 'bg-cyan-700 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                  )}
-                >{fmt}</button>
-              ))}
-            </div>
-          </FieldRow>
-        </div>
-      )}
+        {/* ─── CRAWL ─── */}
+        <TabsContent value="crawl">
+          <Card>
+            <CardHeader>
+              <CardTitle>Crawl a website</CardTitle>
+              <CardDescription>Follow links from a seed URL and scrape multiple pages.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <FieldLabel>Seed URL *</FieldLabel>
+                <Input type="url" placeholder="https://docs.example.com" value={crawlUrl} onChange={e => setCrawlUrl(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <FieldLabel>Max depth <span className="text-muted-foreground/60">(1–5)</span></FieldLabel>
+                  <Input type="number" min={1} max={5} value={crawlDepth} onChange={e => setCrawlDepth(Number(e.target.value))} />
+                </div>
+                <div>
+                  <FieldLabel>Max pages</FieldLabel>
+                  <Input type="number" min={1} max={1000} value={crawlLimit} onChange={e => setCrawlLimit(Number(e.target.value))} />
+                </div>
+                <div className="flex flex-col justify-end pb-0.5">
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+                    <input type="checkbox" checked={crawlSameDomain} onChange={e => setCrawlSameDomain(e.target.checked)} className="accent-primary" />
+                    Same domain only
+                  </label>
+                </div>
+              </div>
+              <div>
+                <FieldLabel>Exclude URL patterns <span className="text-muted-foreground/60">(one per line)</span></FieldLabel>
+                <Textarea rows={3} placeholder={"/login\n/logout\n/admin"} value={crawlExclude} onChange={e => setCrawlExclude(e.target.value)} className="font-mono text-xs" />
+              </div>
+              <Button onClick={() => void run('crawl')} disabled={running || !crawlUrl.trim()} className="gap-2">
+                {running ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+                {running ? 'Running…' : 'Start crawl'}
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      {/* Run button */}
-      <button
-        onClick={() => void run()}
-        disabled={!canRun}
-        className="flex items-center gap-2 px-5 py-2.5 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium rounded-xl transition-colors"
-      >
-        {running ? <Loader size={15} className="animate-spin" /> : <Play size={15} />}
-        {running ? 'En cours…' : `Lancer ${mode}`}
-      </button>
+        {/* ─── BATCH ─── */}
+        <TabsContent value="batch">
+          <Card>
+            <CardHeader>
+              <CardTitle>Batch scrape</CardTitle>
+              <CardDescription>Scrape multiple URLs in parallel. One URL per line.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <FieldLabel>URLs * <span className="text-muted-foreground/60">(one per line)</span></FieldLabel>
+                <Textarea
+                  rows={7}
+                  placeholder={"https://github.com/ferelking242/deepfetch\nhttps://news.ycombinator.com\nhttps://example.com"}
+                  value={batchUrls}
+                  onChange={e => setBatchUrls(e.target.value)}
+                  className="font-mono text-xs"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <FieldLabel>Priority</FieldLabel>
+                  <div className="flex gap-1.5">
+                    {(['high', 'normal', 'batch'] as const).map(p => (
+                      <ToggleChip key={p} label={p} active={batchPriority === p} onClick={() => setBatchPriority(p)} />
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <FieldLabel>Output formats</FieldLabel>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {OUTPUT_FMTS.filter(f => f !== 'screenshot').map(f => (
+                      <ToggleChip key={f} label={f} active={batchOutput.includes(f)}
+                        onClick={() => toggleFmt(f, batchOutput, setBatchOutput)} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <Button onClick={() => void run('batch')} disabled={running || !batchUrls.trim()} className="gap-2">
+                {running ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+                {running ? 'Running…' : `Batch scrape (${batchUrls.split('\n').filter(s => s.trim()).length} URLs)`}
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
-      {/* Results */}
+      {/* ─── RESULTS ─── */}
       <div ref={resultRef} className="space-y-3">
         {error && (
-          <div className="card border-red-900 bg-red-950/20">
-            <p className="text-sm text-red-400 font-medium">Erreur</p>
-            <p className="text-xs text-red-300 mt-1 font-mono">{error}</p>
-          </div>
+          <Card className="border-destructive/30 bg-destructive/5 animate-fade-in">
+            <CardContent className="p-4 flex items-start gap-2.5">
+              <AlertCircle size={14} className="text-destructive mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-destructive">Error</p>
+                <p className="text-xs text-destructive/80 mt-1 font-mono">{error}</p>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {result !== null && !error && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
+          <div className="space-y-3 animate-fade-in">
+            {/* Result header */}
+            <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-green-400" />
-                <span className="text-sm text-green-400 font-medium">Succès</span>
-                {duration && <span className="text-xs text-gray-500">· {(duration / 1000).toFixed(2)}s</span>}
+                <CheckCircle2 size={14} className="text-emerald-500" />
+                <span className="text-sm font-medium text-emerald-500">Success</span>
               </div>
-              <CopyButton text={JSON.stringify(result, null, 2)} />
+              {duration !== null && (
+                <>
+                  <Separator orientation="vertical" className="h-4" />
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Clock size={11} />
+                    {fmtDuration(0, duration)}
+                  </div>
+                </>
+              )}
+              <div className="ml-auto">
+                <CopyButton text={JSON.stringify(result, null, 2)} />
+              </div>
             </div>
 
-            {/* Markdown preview if available */}
+            {/* Markdown preview */}
             {(() => {
-              const r = result as Record<string, unknown>
-              const md = r?.markdown ?? r?.result?.markdown ?? r?.pages?.[0]?.markdown
-              if (typeof md === 'string' && md.length > 0) {
-                return <MarkdownViewer content={md} />
-              }
-              return null
+              const r = result as Record<string, unknown> | null
+              const raw = r?.markdown ?? (r?.result as Record<string, unknown> | null)?.markdown
+              const md = typeof raw === 'string' ? raw : null
+              return md ? (
+                <CollapsibleBlock title="Markdown preview">
+                  {md}
+                </CollapsibleBlock>
+              ) : null
             })()}
 
-            <JsonViewer data={result} />
+            {/* Full JSON */}
+            <CollapsibleBlock title="JSON response">
+              {JSON.stringify(result, null, 2)}
+            </CollapsibleBlock>
           </div>
         )}
       </div>

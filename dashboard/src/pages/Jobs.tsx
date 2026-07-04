@@ -1,44 +1,55 @@
 import { useState, useCallback } from 'react'
-import { useApi } from '../hooks/useApi.ts'
-import { useWebSocket } from '../hooks/useWebSocket.ts'
-import { listJobs, cancelJob, scrape } from '../lib/api.ts'
-import JobCard from '../components/JobCard.tsx'
-import { Plus, Wifi, WifiOff, RefreshCw } from 'lucide-react'
-import type { Job, WsMessage } from '../lib/api.ts'
+import { useApi } from '@/hooks/useApi'
+import { useWebSocket } from '@/hooks/useWebSocket'
+import { listJobs, cancelJob, scrape } from '@/lib/api'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
+import { Plus, RefreshCw, Wifi, WifiOff, X, ExternalLink, AlertCircle } from 'lucide-react'
+import { cn, ago, domain, fmtDuration } from '@/lib/utils'
+import type { Job, WsMessage } from '@/lib/api'
 
 const STATUS_FILTERS = ['all', 'queued', 'running', 'done', 'failed'] as const
 
+const STATUS_BADGE: Record<Job['status'], { variant: 'default' | 'success' | 'destructive' | 'warning' | 'secondary'; label: string }> = {
+  queued:    { variant: 'warning',     label: 'Queued' },
+  running:   { variant: 'default',     label: 'Running' },
+  done:      { variant: 'success',     label: 'Done' },
+  failed:    { variant: 'destructive', label: 'Failed' },
+  cancelled: { variant: 'secondary',   label: 'Cancelled' },
+}
+
+const PRIORITY_COLOR: Record<Job['priority'], string> = {
+  high:   'text-primary',
+  normal: 'text-muted-foreground',
+  batch:  'text-muted-foreground/60',
+}
+
 export default function Jobs() {
   const [filter, setFilter] = useState<string>('all')
-  const [scrapeUrl, setScrapeUrl] = useState('')
+  const [url, setUrl] = useState('')
   const [scraping, setScraping] = useState(false)
-  const [showScrape, setShowScrape] = useState(false)
+  const [showForm, setShowForm] = useState(false)
 
   const { data, loading, refetch } = useApi(
-    () => listJobs({ status: filter === 'all' ? undefined : filter, limit: 100 }),
+    () => listJobs({ status: filter === 'all' ? undefined : filter, limit: 200 }),
     [filter],
-    3000
+    4000
   )
 
-  const handleWsMessage = useCallback((_msg: WsMessage) => {
-    void refetch()
-  }, [refetch])
-
-  const { connected } = useWebSocket('/v1/stream', handleWsMessage)
-
-  const handleCancel = async (id: string) => {
-    await cancelJob(id)
-    void refetch()
-  }
+  const onWs = useCallback((_msg: WsMessage) => { void refetch() }, [refetch])
+  const { connected } = useWebSocket('/v1/stream', onWs)
 
   const handleScrape = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!scrapeUrl.trim()) return
+    if (!url.trim()) return
     setScraping(true)
     try {
-      await scrape({ url: scrapeUrl.trim(), priority: 'high' })
-      setScrapeUrl('')
-      setShowScrape(false)
+      await scrape({ url: url.trim(), priority: 'high' })
+      setUrl('')
+      setShowForm(false)
       void refetch()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Scrape failed')
@@ -50,79 +61,150 @@ export default function Jobs() {
   const jobs: Job[] = data?.jobs ?? []
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-6 space-y-4 animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold">Jobs</h1>
-          {connected
-            ? <Wifi size={14} className="text-green-400" />
-            : <WifiOff size={14} className="text-gray-500" />}
+        <div className="flex items-center gap-2.5">
+          <h1 className="text-base font-semibold">Jobs</h1>
+          {data && (
+            <Badge variant="secondary" className="font-mono">{data.count}</Badge>
+          )}
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            {connected
+              ? <><Wifi size={11} className="text-emerald-500" /> live</>
+              : <><WifiOff size={11} /> reconnecting</>}
+          </span>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => void refetch()} className="text-gray-500 hover:text-gray-300 transition-colors">
-            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-          </button>
-          <button
-            onClick={() => setShowScrape(s => !s)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-sm rounded-lg transition-colors"
-          >
-            <Plus size={14} /> New Scrape
-          </button>
+          <Button variant="ghost" size="icon" onClick={() => void refetch()}>
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          </Button>
+          <Button size="sm" onClick={() => setShowForm(s => !s)}>
+            <Plus size={13} /> Quick scrape
+          </Button>
         </div>
       </div>
 
       {/* Quick scrape form */}
-      {showScrape && (
-        <form onSubmit={e => void handleScrape(e)} className="card flex gap-2">
-          <input
-            type="url"
-            value={scrapeUrl}
-            onChange={e => setScrapeUrl(e.target.value)}
-            placeholder="https://..."
-            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-cyan-500"
-            autoFocus
-          />
-          <button
-            type="submit"
-            disabled={scraping}
-            className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white text-sm rounded-lg transition-colors"
-          >
-            {scraping ? 'Queuing…' : 'Go'}
-          </button>
-        </form>
+      {showForm && (
+        <Card className="animate-fade-in">
+          <CardContent className="p-4">
+            <form onSubmit={e => void handleScrape(e)} className="flex gap-2">
+              <Input
+                type="url"
+                placeholder="https://example.com"
+                value={url}
+                onChange={e => setUrl(e.target.value)}
+                className="flex-1"
+                autoFocus
+              />
+              <Button type="submit" disabled={scraping || !url.trim()} size="sm">
+                {scraping ? <RefreshCw size={12} className="animate-spin" /> : 'Scrape'}
+              </Button>
+              <Button type="button" variant="ghost" size="icon" onClick={() => setShowForm(false)}>
+                <X size={13} />
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       )}
 
       {/* Filters */}
-      <div className="flex gap-1.5">
+      <div className="flex items-center gap-1">
         {STATUS_FILTERS.map(f => (
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`px-3 py-1 rounded-lg text-xs font-medium capitalize transition-colors ${
+            className={cn(
+              'px-3 py-1.5 rounded-md text-xs font-medium transition-colors capitalize',
               filter === f
-                ? 'bg-gray-800 text-gray-100'
-                : 'text-gray-500 hover:text-gray-300'
-            }`}
+                ? 'bg-accent text-accent-foreground'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+            )}
           >
             {f}
           </button>
         ))}
-        <span className="ml-auto text-xs text-gray-600 self-center">{jobs.length} jobs</span>
       </div>
 
-      {/* Job list */}
-      <div className="space-y-2">
-        {jobs.length === 0 && !loading && (
-          <div className="text-center py-16 text-gray-600">
-            <p>No jobs yet.</p>
-            <p className="text-sm mt-1">Click "New Scrape" to create one.</p>
-          </div>
-        )}
-        {jobs.map(job => (
-          <JobCard key={job.id} job={job} onCancel={handleCancel} />
-        ))}
-      </div>
+      {/* Table */}
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow className="border-b border-border hover:bg-transparent">
+              <TableHead className="w-24">Status</TableHead>
+              <TableHead>URL</TableHead>
+              <TableHead className="w-24">Platform</TableHead>
+              <TableHead className="w-20">Priority</TableHead>
+              <TableHead className="w-24">Duration</TableHead>
+              <TableHead className="w-24">Created</TableHead>
+              <TableHead className="w-16" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {jobs.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
+                  {loading ? 'Loading…' : 'No jobs found'}
+                </TableCell>
+              </TableRow>
+            )}
+            {jobs.map(job => {
+              const s = STATUS_BADGE[job.status]
+              return (
+                <TableRow key={job.id}>
+                  <TableCell>
+                    <Badge variant={s.variant} className={cn(job.status === 'running' && 'animate-pulse')}>
+                      {s.label}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="max-w-xs">
+                    <div className="flex items-center gap-1.5">
+                      <a
+                        href={job.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono text-xs text-foreground hover:text-primary truncate max-w-[240px] block transition-colors"
+                      >
+                        {domain(job.url)}
+                      </a>
+                      <ExternalLink size={10} className="text-muted-foreground flex-shrink-0" />
+                    </div>
+                    {job.error && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <AlertCircle size={10} className="text-destructive" />
+                        <span className="text-xs text-destructive truncate max-w-[220px]">{job.error}</span>
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="font-mono text-xs">{job.platform}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <span className={cn('text-xs font-medium', PRIORITY_COLOR[job.priority])}>{job.priority}</span>
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground font-mono">
+                    {job.started_at && job.finished_at ? fmtDuration(job.started_at, job.finished_at) : '—'}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{ago(job.created_at)}</TableCell>
+                  <TableCell>
+                    {job.status === 'queued' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
+                        onClick={() => { void cancelJob(job.id).then(() => void refetch()) }}
+                      >
+                        Cancel
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      </Card>
     </div>
   )
 }

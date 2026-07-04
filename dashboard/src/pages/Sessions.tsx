@@ -1,53 +1,41 @@
 import { useState } from 'react'
-import { useApi } from '../hooks/useApi.ts'
-import { listSessions, deleteSession, checkSession, createSessionCredentials } from '../lib/api.ts'
-import { Shield, ShieldCheck, ShieldX, RefreshCw, Trash2, Plus } from 'lucide-react'
-import clsx from 'clsx'
+import { useApi } from '@/hooks/useApi'
+import { listSessions, deleteSession, checkSession, createSessionCredentials } from '@/lib/api'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
+import { Plus, RefreshCw, Shield, ShieldCheck, ShieldX, Trash2 } from 'lucide-react'
+import { cn, fmtDate } from '@/lib/utils'
 
-const STATUS_ICONS = {
-  active:  { icon: ShieldCheck, color: 'text-green-400' },
-  expired: { icon: ShieldX,     color: 'text-yellow-400' },
-  invalid: { icon: ShieldX,     color: 'text-red-400' },
+const PLATFORMS = ['instagram', 'tiktok', 'reddit', 'twitter', 'facebook', 'youtube']
+
+const STATUS_CFG = {
+  active:  { icon: ShieldCheck, variant: 'success'     as const, label: 'Active'  },
+  expired: { icon: ShieldX,     variant: 'warning'     as const, label: 'Expired' },
+  invalid: { icon: ShieldX,     variant: 'destructive' as const, label: 'Invalid' },
 }
 
 export default function Sessions() {
   const { data, loading, refetch } = useApi(listSessions, [], 10000)
   const [showAdd, setShowAdd] = useState(false)
-  const [form, setForm] = useState({ platform: 'instagram', username: '', password: '', label: '' })
+  const [platform, setPlatform] = useState('instagram')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [label, setLabel] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [checkingId, setCheckingId] = useState<string | null>(null)
 
   const sessions = data?.sessions ?? []
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this session?')) return
-    await deleteSession(id)
-    void refetch()
-  }
-
-  const handleCheck = async (id: string) => {
-    setCheckingId(id)
-    try {
-      const result = await checkSession(id)
-      alert(`Session ${result.valid ? '✅ valid' : '❌ expired / invalid'}`)
-      void refetch()
-    } finally {
-      setCheckingId(null)
-    }
-  }
-
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitting(true)
     try {
-      await createSessionCredentials({
-        type: 'credentials',
-        platform: form.platform,
-        username: form.username,
-        password: form.password,
-        label: form.label || undefined,
-      })
-      setForm({ platform: 'instagram', username: '', password: '', label: '' })
+      await createSessionCredentials({ type: 'credentials', platform, username, password, label: label || undefined })
+      setUsername(''); setPassword(''); setLabel('')
       setShowAdd(false)
       void refetch()
     } catch (err) {
@@ -57,124 +45,144 @@ export default function Sessions() {
     }
   }
 
+  const handleCheck = async (id: string) => {
+    setCheckingId(id)
+    try {
+      const r = await checkSession(id)
+      alert(`Session ${r.valid ? '✅ valid' : '❌ invalid / expired'}`)
+      void refetch()
+    } finally {
+      setCheckingId(null)
+    }
+  }
+
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-6 space-y-4 animate-fade-in">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Sessions</h1>
+        <div>
+          <h1 className="text-base font-semibold">Sessions</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">Authenticated browser sessions for gated content</p>
+        </div>
         <div className="flex gap-2">
-          <button onClick={() => void refetch()} className="text-gray-500 hover:text-gray-300 transition-colors">
-            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-          </button>
-          <button
-            onClick={() => setShowAdd(s => !s)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-sm rounded-lg transition-colors"
-          >
-            <Plus size={14} /> Add Session
-          </button>
+          <Button variant="ghost" size="icon" onClick={() => void refetch()}>
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          </Button>
+          <Button size="sm" onClick={() => setShowAdd(s => !s)}>
+            <Plus size={13} /> Add session
+          </Button>
         </div>
       </div>
 
+      {/* Add form */}
       {showAdd && (
-        <form onSubmit={e => void handleAdd(e)} className="card space-y-3">
-          <h3 className="text-sm font-semibold text-gray-300">Login with credentials</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Platform</label>
-              <select
-                value={form.platform}
-                onChange={e => setForm(f => ({ ...f, platform: e.target.value }))}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100"
-              >
-                {['instagram', 'tiktok', 'reddit', 'twitter', 'facebook'].map(p => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Label (optional)</label>
-              <input
-                type="text"
-                value={form.label}
-                onChange={e => setForm(f => ({ ...f, label: e.target.value }))}
-                placeholder="my-account"
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Username</label>
-              <input
-                type="text"
-                required
-                value={form.username}
-                onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Password</label>
-              <input
-                type="password"
-                required
-                value={form.password}
-                onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100"
-              />
-            </div>
-          </div>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white text-sm rounded-lg transition-colors"
-          >
-            {submitting ? 'Logging in…' : 'Login & Save Session'}
-          </button>
-        </form>
-      )}
-
-      <div className="space-y-2">
-        {sessions.length === 0 && !loading && (
-          <div className="text-center py-16 text-gray-600">
-            <Shield size={32} className="mx-auto mb-3 opacity-30" />
-            <p>No sessions yet.</p>
-            <p className="text-sm mt-1">Add a session to scrape authenticated content.</p>
-          </div>
-        )}
-        {sessions.map(s => {
-          const cfg = STATUS_ICONS[s.status]
-          const Icon = cfg.icon
-          return (
-            <div key={s.id} className="card flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <Icon size={18} className={cfg.color} />
-                <div>
-                  <p className="text-sm font-medium">{s.label}</p>
-                  <p className="text-xs text-gray-500">
-                    {s.platform} · {s.cookie_count} cookies
-                    {s.has_credentials && ' · credentials saved'}
-                  </p>
+        <Card className="animate-fade-in">
+          <CardHeader>
+            <CardTitle>Login with credentials</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={e => void handleAdd(e)} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs text-muted-foreground">Platform</label>
+                  <Select value={platform} onValueChange={setPlatform}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {PLATFORMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs text-muted-foreground">Label (optional)</label>
+                  <Input value={label} onChange={e => setLabel(e.target.value)} placeholder="my-account" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs text-muted-foreground">Username</label>
+                  <Input required value={username} onChange={e => setUsername(e.target.value)} autoComplete="off" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs text-muted-foreground">Password</label>
+                  <Input required type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="new-password" />
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className={clsx('badge text-xs', {
-                  'bg-green-900/40 text-green-400': s.status === 'active',
-                  'bg-yellow-900/40 text-yellow-400': s.status === 'expired',
-                  'bg-red-900/40 text-red-400': s.status === 'invalid',
-                })}>{s.status}</span>
-                <button
-                  onClick={() => void handleCheck(s.id)}
-                  disabled={checkingId === s.id}
-                  className="text-xs text-gray-500 hover:text-cyan-400 transition-colors"
-                >
-                  {checkingId === s.id ? 'Checking…' : 'Check'}
-                </button>
-                <button onClick={() => void handleDelete(s.id)} className="text-gray-600 hover:text-red-400 transition-colors">
-                  <Trash2 size={14} />
-                </button>
+              <div className="flex gap-2 pt-1">
+                <Button type="submit" disabled={submitting} size="sm">
+                  {submitting ? <RefreshCw size={12} className="animate-spin" /> : null}
+                  {submitting ? 'Logging in…' : 'Login & save'}
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setShowAdd(false)}>Cancel</Button>
               </div>
-            </div>
-          )
-        })}
-      </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Table */}
+      <Card>
+        {sessions.length === 0 && !loading ? (
+          <CardContent className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-3">
+            <Shield size={32} className="opacity-20" />
+            <p className="text-sm">No sessions yet</p>
+            <p className="text-xs">Add a session to scrape authenticated content</p>
+          </CardContent>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Status</TableHead>
+                <TableHead>Label</TableHead>
+                <TableHead>Platform</TableHead>
+                <TableHead>Cookies</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="w-28" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sessions.map(s => {
+                const cfg = STATUS_CFG[s.status]
+                const Icon = cfg.icon
+                return (
+                  <TableRow key={s.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5">
+                        <Icon size={13} className={cn(
+                          s.status === 'active' ? 'text-emerald-500' :
+                          s.status === 'expired' ? 'text-amber-500' : 'text-destructive'
+                        )} />
+                        <Badge variant={cfg.variant}>{cfg.label}</Badge>
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-medium text-sm">{s.label}</TableCell>
+                    <TableCell><Badge variant="outline" className="font-mono">{s.platform}</Badge></TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{s.cookie_count}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{fmtDate(s.created_at)}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          disabled={checkingId === s.id}
+                          onClick={() => void handleCheck(s.id)}
+                        >
+                          {checkingId === s.id ? 'Checking…' : 'Verify'}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          onClick={() => { if (confirm('Delete session?')) void deleteSession(s.id).then(() => void refetch()) }}
+                        >
+                          <Trash2 size={12} />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </Card>
     </div>
   )
 }

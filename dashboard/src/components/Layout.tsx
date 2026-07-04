@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { Activity, Layers, Shield, Settings, Zap, FlaskConical } from 'lucide-react'
-import clsx from 'clsx'
+import { cn } from '@/lib/utils'
 import type { ReactNode } from 'react'
 
 const NAV = [
@@ -13,50 +13,48 @@ const NAV = [
 
 export default function Layout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex h-screen overflow-hidden">
-      {/* Sidebar */}
-      <aside className="w-52 flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col">
+    <div className="flex h-screen overflow-hidden bg-background">
+      <aside className="w-52 flex-shrink-0 flex flex-col border-r border-sidebar-border bg-sidebar">
         {/* Logo */}
-        <div className="px-5 py-5 border-b border-gray-800">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-900/40">
-              <Zap size={14} className="text-white" />
-            </div>
-            <span className="font-bold text-lg tracking-tight text-gradient">deepfetch</span>
+        <div className="flex items-center gap-2.5 px-4 py-4 border-b border-sidebar-border">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 ring-1 ring-primary/20">
+            <Zap size={13} className="text-primary" />
           </div>
+          <span className="text-sm font-semibold tracking-tight">deepfetch</span>
+          <span className="ml-auto text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">v1</span>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-2 py-4 space-y-0.5">
+        <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
           {NAV.map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
               to={to}
               className={({ isActive }) =>
-                clsx(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
+                cn(
+                  'flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors',
                   isActive
-                    ? 'bg-cyan-950/60 text-cyan-400 border border-cyan-900/60'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/60 border border-transparent'
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50'
                 )
               }
             >
-              <Icon size={15} />
+              <Icon size={14} className="flex-shrink-0" />
               {label}
             </NavLink>
           ))}
         </nav>
 
-        <div className="px-4 py-4 border-t border-gray-800">
+        {/* Status */}
+        <div className="px-4 py-3 border-t border-sidebar-border">
           <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            <p className="text-xs text-gray-600">DeepFetch v1.0.0</p>
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse-dot" />
+            <span className="text-xs text-muted-foreground">Server running</span>
           </div>
         </div>
       </aside>
 
-      {/* Main */}
-      <main className="flex-1 overflow-y-auto bg-gray-950">
+      <main className="flex-1 overflow-y-auto">
         {children}
       </main>
     </div>

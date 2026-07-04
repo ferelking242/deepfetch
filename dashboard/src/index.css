@@ -3,25 +3,46 @@
 @tailwind utilities;
 
 @layer base {
-  * { box-sizing: border-box; }
-  body {
-    @apply bg-gray-950 text-gray-100 antialiased;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  :root {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 6%;
+    --card-foreground: 0 0% 98%;
+    --primary: 187 85% 53%;
+    --primary-foreground: 240 10% 3.9%;
+    --secondary: 240 5% 12%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 5% 12%;
+    --muted-foreground: 240 5% 55%;
+    --accent: 240 5% 14%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5% 14%;
+    --input: 240 5% 14%;
+    --ring: 187 85% 53%;
+    --radius: 0.5rem;
+    --sidebar: 240 10% 4.5%;
+    --sidebar-border: 240 5% 11%;
+    --sidebar-accent: 240 5% 12%;
+    --sidebar-accent-foreground: 0 0% 95%;
   }
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { @apply bg-gray-900; }
-  ::-webkit-scrollbar-thumb { @apply bg-gray-700 rounded-full; }
-  ::-webkit-scrollbar-thumb:hover { @apply bg-gray-600; }
-}
 
-@layer utilities {
-  .text-gradient {
-    @apply bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent;
+  * {
+    border-color: hsl(var(--border));
+    box-sizing: border-box;
   }
-  .card {
-    @apply bg-gray-900 border border-gray-800 rounded-xl p-4;
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
-  .badge {
-    @apply inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium;
-  }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: hsl(240 5% 20%); border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(240 5% 30%); }
 }

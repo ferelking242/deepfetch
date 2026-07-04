@@ -1,10 +1,10 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
-import Layout from './components/Layout.tsx'
-import Jobs from './pages/Jobs.tsx'
-import Sessions from './pages/Sessions.tsx'
-import Health from './pages/Health.tsx'
-import Settings from './pages/Settings.tsx'
-import Playground from './pages/Playground.tsx'
+import Layout from './components/Layout'
+import Jobs from './pages/Jobs'
+import Sessions from './pages/Sessions'
+import Health from './pages/Health'
+import Settings from './pages/Settings'
+import Playground from './pages/Playground'
 
 export default function App() {
   return (
