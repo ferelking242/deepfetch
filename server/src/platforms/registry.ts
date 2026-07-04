@@ -4,6 +4,7 @@ import { YouTubeAdapter } from './youtube.js'
 import { TikTokAdapter } from './tiktok.js'
 import { InstagramAdapter } from './instagram.js'
 import { RedditAdapter } from './reddit.js'
+import { FacebookAdapter } from './facebook.js'
 import type { BrowserPool } from '../core/BrowserPool.js'
 import type { AIEngine } from '../ai/AIEngine.js'
 import type { Logger } from 'pino'
@@ -19,6 +20,7 @@ export class PlatformRegistry {
       new YouTubeAdapter(pool, aiEngine, logger),
       new TikTokAdapter(pool, aiEngine, logger),
       new InstagramAdapter(pool, aiEngine, logger),
+      new FacebookAdapter(pool, aiEngine, logger),
       new RedditAdapter(pool, aiEngine, logger),
     ]
   }
