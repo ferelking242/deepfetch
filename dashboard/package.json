@@ -1,6 +1,6 @@
 {
   "name": "@deepfetch/dashboard",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,13 +17,19 @@
     "clsx": "^2.1.1",
     "class-variance-authority": "^0.7.1",
     "tailwind-merge": "^2.6.0",
+    "recharts": "^2.12.7",
+    "sonner": "^1.5.0",
+    "i18next": "^23.11.5",
+    "react-i18next": "^14.1.2",
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-tabs": "^1.1.12",
     "@radix-ui/react-dialog": "^1.1.6",
     "@radix-ui/react-select": "^2.2.5",
     "@radix-ui/react-separator": "^1.1.7",
     "@radix-ui/react-tooltip": "^1.2.7",
-    "@radix-ui/react-scroll-area": "^1.2.9"
+    "@radix-ui/react-scroll-area": "^1.2.9",
+    "@radix-ui/react-dropdown-menu": "^2.1.6",
+    "@radix-ui/react-collapsible": "^1.1.11"
   },
   "devDependencies": {
     "@types/react": "^18.3.21",
