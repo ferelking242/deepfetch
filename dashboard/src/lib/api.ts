@@ -51,9 +51,10 @@ export const deleteSession = (id: string) => apiFetch<{ message: string }>(`/v1/
 
 // ─── API Keys ─────────────────────────────────────────────────────────────────
 export const listKeys = () => apiFetch<{ keys: ApiKeyRow[] }>('/v1/keys')
-export const createKey = (body: { label: string; rate_limit_per_minute?: number }) =>
-  apiFetch<{ id: string; key: string; label: string; warning: string }>('/v1/keys', { method: 'POST', body: JSON.stringify(body) })
+export const createKey = (body: CreateKeyBody) =>
+  apiFetch<CreatedKey>('/v1/keys', { method: 'POST', body: JSON.stringify(body) })
 export const deleteKey = (id: string) => apiFetch<{ message: string }>(`/v1/keys/${id}`, { method: 'DELETE' })
+export const whoami = () => apiFetch<WhoamiResult>('/v1/auth/whoami')
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface SystemHealth {
@@ -97,12 +98,44 @@ export interface SessionSummary {
   created_at: number
 }
 
+export type Scope = 'scrape' | 'crawl' | 'read' | 'admin' | '*'
+
 export interface ApiKeyRow {
   id: string
   label: string
+  scopes: Scope[]
   rate_limit_per_minute: number
+  expires_at: number | null
+  expired: boolean
   created_at: number
   last_used: number | null
+}
+
+export interface CreateKeyBody {
+  label: string
+  scopes?: Scope[]
+  rate_limit_per_minute?: number
+  expires_in_days?: number
+}
+
+export interface CreatedKey {
+  id: string
+  key: string
+  label: string
+  scopes: Scope[]
+  rate_limit_per_minute: number
+  expires_at: number | null
+  warning: string
+}
+
+export interface WhoamiResult {
+  type: 'master' | 'api_key'
+  id?: string
+  label: string
+  scopes: Scope[]
+  rate_limit_per_minute: number
+  expires_at: number | null
+  expired?: boolean
 }
 
 export interface ScrapeRequest {

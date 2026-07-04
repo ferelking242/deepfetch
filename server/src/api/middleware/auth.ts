@@ -31,9 +31,15 @@ import { createHash } from 'node:crypto'
         return reply.status(401).send({ error: 'Invalid API key.' })
       }
 
+      // Check expiry
+      if ((row as any).expires_at && (row as any).expires_at < Date.now()) {
+        return reply.status(401).send({ error: 'API key has expired.' })
+      }
+
       db.prepare('UPDATE api_keys SET last_used=? WHERE id=?').run(Date.now(), row.id)
       ;(request as any).keyId = row.id
       ;(request as any).rateLimitPerMin = row.rate_limit_per_minute
+      ;(request as any).scopes = ((row as any).scopes ?? '*').split(',').filter(Boolean)
     }
   }
   

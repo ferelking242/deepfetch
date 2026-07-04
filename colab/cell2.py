@@ -127,11 +127,18 @@ print('   ✅ Dashboard built')
 
 # ── 7. Write config.yaml (idempotent)
 import yaml as _yaml
-_new_secret = secrets.token_hex(32)
+# dfk_master_ prefix — recognisable like ghp_ / sk-  (70 chars total)
+_new_secret = 'dfk_master_' + secrets.token_hex(32)
 if os.path.exists(CFG):
     try:
         _cfg = _yaml.safe_load(open(CFG)) or {}
-        _new_secret = _cfg.get('server', {}).get('master_secret', _new_secret)
+        _existing = _cfg.get('server', {}).get('master_secret', '')
+        # Keep existing key if valid; migrate old bare-hex keys to new format
+        if _existing:
+            if not _existing.startswith('dfk_master_'):
+                _new_secret = 'dfk_master_' + _existing  # one-time migration
+            else:
+                _new_secret = _existing
     except Exception:
         pass
 
@@ -213,16 +220,23 @@ try:
 except Exception:
     _master = ''
 
+_sep = '═' * 64
 print('')
-print('═══════════════════════════════════════════════════════')
-print('  🎉  DeepFetch is LIVE — open on any device')
-print('═══════════════════════════════════════════════════════')
-print('  📊  Dashboard : ' + PUBLIC_URL + '/dashboard')
-print('  🔌  MCP config  :')
+print(_sep)
+print('  🎉  DeepFetch is LIVE')
+print(_sep)
+print('  📊  Dashboard    : ' + PUBLIC_URL + '/dashboard')
+print('  📖  API Docs     : ' + PUBLIC_URL + '/docs')
+print('  ❤️   Health       : ' + PUBLIC_URL + '/v1/health')
+print('')
+print('  🔑  Master key (full — paste into Dashboard → Settings):')
+print('      ' + _master)
+print('')
+print('  🔌  MCP / env config:')
 print('      DEEPFETCH_URL=' + PUBLIC_URL)
-print('      DEEPFETCH_API_KEY=' + _master[:8] + '...')
-print('  📖  API Docs  : ' + PUBLIC_URL + '/docs')
-print('  ❤️   Health    : ' + PUBLIC_URL + '/v1/health')
-print('═══════════════════════════════════════════════════════')
-print('  Configure AI keys from the Dashboard ↑')
+print('      DEEPFETCH_API_KEY=' + _master)
+print(_sep)
+print('  ⚠️   Store the master key securely. Generate dedicated')
+print('       agent keys from Dashboard → Settings → New key.')
+print(_sep)
 print('')

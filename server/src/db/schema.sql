@@ -50,10 +50,15 @@ CREATE TABLE IF NOT EXISTS api_keys (
   id                    TEXT PRIMARY KEY,
   key_hash              TEXT NOT NULL UNIQUE,  -- SHA-256 of the raw key
   label                 TEXT NOT NULL,
+  scopes                TEXT NOT NULL DEFAULT '*',  -- comma-separated: scrape,crawl,read,admin,* 
   rate_limit_per_minute INTEGER NOT NULL DEFAULT 60,
+  expires_at            INTEGER,               -- NULL = never expires
   created_at            INTEGER NOT NULL,
   last_used             INTEGER
 );
+
+-- Migrate: add scopes column if upgrading from old schema
+CREATE INDEX IF NOT EXISTS idx_apikeys_hash ON api_keys(key_hash);
 
 -- ─── Audit Log ───────────────────────────────────────────────────────────────
 
