@@ -17,6 +17,8 @@ import { JobQueue } from './core/JobQueue.js'
 import { JobWorker } from './core/JobWorker.js'
 import { PlatformRegistry } from './platforms/registry.js'
 import { AIEngine } from './ai/AIEngine.js'
+import { ActionEngine } from './ai/ActionEngine.js'
+import { AgentRunner } from './ai/AgentRunner.js'
 import { SessionStore } from './sessions/SessionStore.js'
 import { SessionValidator } from './sessions/SessionValidator.js'
 import { LoginAgent } from './sessions/LoginAgent.js'
@@ -28,6 +30,7 @@ import { registerBatchRoutes } from './api/routes/batch.js'
 import { registerCrawlRoutes } from './api/routes/crawl.js'
 import { registerSessionRoutes } from './api/routes/sessions.js'
 import { registerKeyRoutes } from './api/routes/keys.js'
+import { registerAgentRoutes } from './api/routes/agent.js'
 import { registerWebSocketRoutes } from './api/websocket/jobStream.js'
 import { authMiddleware } from './api/middleware/auth.js'
 
@@ -38,6 +41,9 @@ async function main() {
 
   const logger = pino({ level: 'info' })
 
+  // Ensure DB is ready
+  getDb()
+
   const resources = new ResourceManager(logger)
   await resources.startMonitoring()
 
@@ -47,16 +53,20 @@ async function main() {
 
   const queue = new JobQueue(logger)
   const aiEngine = new AIEngine(logger)
+  const actionEngine = new ActionEngine(aiEngine, logger)
   const sessionStore = new SessionStore()
 
   const registry = new PlatformRegistry(pool, aiEngine, logger)
   const sessionValidator = new SessionValidator(sessionStore, pool, logger)
   const loginAgent = new LoginAgent(sessionStore, pool, logger)
 
+  const agentRunner = new AgentRunner(aiEngine, actionEngine, pool, sessionStore, logger)
+
   const worker = new JobWorker(queue, pool, resources, registry, logger)
   worker.start()
 
   setInterval(() => queue.cleanup(), 30 * 60 * 1000)
+  setInterval(() => actionEngine.actionCache.evict(), 60 * 60 * 1000) // hourly cache eviction
   sessionValidator.startPeriodicChecks()
 
   const fastify = Fastify({ logger: { level: 'info' }, trustProxy: true })
@@ -66,21 +76,19 @@ async function main() {
 
   await fastify.register(fastifySwagger, {
     openapi: {
-      info: { title: 'DeepFetch API', version: '1.0.0', description: 'Universal scraping & automation engine' },
+      info: { title: 'DeepFetch API', version: '1.0.0', description: 'Universal scraping & automation engine with AI agent capabilities' },
       servers: [{ url: `http://localhost:${cfg.server.port}` }],
     },
   })
   await fastify.register(fastifySwaggerUi, { routePrefix: '/docs' })
 
   // ── Dashboard static files
-  // __dirname = /deepfetch/server/dist  →  ../../dashboard/dist = /deepfetch/dashboard/dist
   const dashboardDist = path.join(__dirname, '..', '..', 'dashboard', 'dist')
   if (fs.existsSync(dashboardDist)) {
     await fastify.register(fastifyStatic, {
       root: dashboardDist,
       prefix: '/dashboard',
     })
-    // SPA fallback: all /dashboard/* routes serve index.html
     const serveIndex = (_req: any, reply: any) => reply.sendFile('index.html', dashboardDist)
     fastify.get('/dashboard', serveIndex)
     fastify.get('/dashboard/', serveIndex)
@@ -99,25 +107,59 @@ async function main() {
   // ── Protected routes
   await fastify.register(async (protected_: any) => {
     protected_.addHook('preHandler', authMiddleware(cfg.server.master_secret))
+
     registerJobRoutes(protected_, { queue })
     registerScrapeRoutes(protected_, { queue, pool, registry, sessionStore, resources, aiEngine })
     registerBatchRoutes(protected_, { queue, registry, sessionStore })
     registerCrawlRoutes(protected_, { queue, registry })
     registerSessionRoutes(protected_, { store: sessionStore, validator: sessionValidator, loginAgent })
     registerKeyRoutes(protected_)
+    registerAgentRoutes(protected_, { pool, actionEngine, agentRunner, sessionStore })
     registerWebSocketRoutes(protected_, { queue })
+
     protected_.get('/v1/platforms', async (_req: any, reply: any) => {
       return reply.send({ platforms: registry.list() })
+    })
+
+    // Whoami
+    protected_.get('/v1/auth/whoami', async (_req: any, reply: any) => {
+      const authHeader = _req.headers['authorization'] as string ?? ''
+      const key = authHeader.replace('Bearer ', '').trim()
+      if (!key) return reply.status(401).send({ error: 'No key provided' })
+      if (key === cfg.server.master_secret) {
+        return reply.send({
+          type: 'master',
+          label: 'Master Key',
+          scopes: ['*'],
+          rate_limit_per_minute: 0,
+          expires_at: null,
+        })
+      }
+      // Check API key table
+      const db = getDb()
+      const row = db.prepare('SELECT * FROM api_keys WHERE id = ?').get(key)
+      if (!row) return reply.status(401).send({ error: 'Invalid key' })
+      return reply.send(row)
     })
   })
 
   fastify.get('/', async (_req, reply) => reply.send({
-    name: 'DeepFetch', version: '1.0.0',
-    docs: '/docs', dashboard: '/dashboard', health: '/v1/health',
+    name: 'DeepFetch',
+    version: '1.0.0',
+    docs: '/docs',
+    dashboard: '/dashboard',
+    health: '/v1/health',
+    agent: {
+      act: 'POST /v1/act',
+      extract: 'POST /v1/extract',
+      observe: 'POST /v1/observe',
+      agent: 'POST /v1/agent (SSE)',
+    },
   }))
 
   await fastify.listen({ port: cfg.server.port, host: cfg.server.host })
   fastify.log.info(`DeepFetch running — dashboard: http://localhost:${cfg.server.port}/dashboard`)
+  fastify.log.info(`AI Agent endpoints: /v1/act  /v1/extract  /v1/observe  /v1/agent`)
 
   const shutdown = async (signal: string) => {
     fastify.log.info({ signal }, 'Shutting down...')

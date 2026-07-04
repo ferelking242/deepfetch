@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import {
   Activity, Layers, Shield, Settings, Zap,
   FlaskConical, Sun, Moon, Monitor, Languages,
-  ChevronLeft, ChevronRight, X,
+  ChevronLeft, ChevronRight, X, Bot,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/lib/theme'
@@ -25,6 +25,7 @@ function useNav() {
   const { t } = useTranslation()
   return [
     { to: '/playground', icon: FlaskConical, label: t('nav.playground') },
+    { to: '/agent',      icon: Bot,          label: t('nav.agent') },
     { to: '/jobs',       icon: Layers,       label: t('nav.jobs') },
     { to: '/sessions',   icon: Shield,       label: t('nav.sessions') },
     { to: '/health',     icon: Activity,     label: t('nav.health') },

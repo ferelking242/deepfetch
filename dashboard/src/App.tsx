@@ -6,6 +6,7 @@ import Sessions from './pages/Sessions'
 import Health from './pages/Health'
 import Settings from './pages/Settings'
 import Playground from './pages/Playground'
+import Agent from './pages/Agent'
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
           <Route path="/sessions" element={<Sessions />} />
           <Route path="/health" element={<Health />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/agent" element={<Agent />} />
         </Routes>
       </Layout>
       <Toaster />

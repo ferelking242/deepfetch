@@ -56,7 +56,91 @@ export const createKey = (body: CreateKeyBody) =>
 export const deleteKey = (id: string) => apiFetch<{ message: string }>(`/v1/keys/${id}`, { method: 'DELETE' })
 export const whoami = () => apiFetch<WhoamiResult>('/v1/auth/whoami')
 
+// ─── AI Agent — Act / Extract / Observe ──────────────────────────────────────
+
+export const actOnPage = (body: ActRequest) =>
+  apiFetch<ActResult>('/v1/act', { method: 'POST', body: JSON.stringify(body) })
+
+export const extractFromPage = (body: ExtractRequest) =>
+  apiFetch<ExtractResult>('/v1/extract', { method: 'POST', body: JSON.stringify(body) })
+
+export const observePage = (body: ObserveRequest) =>
+  apiFetch<ObserveResult>('/v1/observe', { method: 'POST', body: JSON.stringify(body) })
+
+export const getAgentCacheStats = () =>
+  apiFetch<{ total: number; hits: number; description: string }>('/v1/agent/cache')
+
+export const clearAgentCache = () =>
+  apiFetch<{ message: string }>('/v1/agent/cache', { method: 'DELETE' })
+
+export const listAgentCache = (limit = 50) =>
+  apiFetch<{ entries: AgentCacheEntry[]; count: number }>(`/v1/agent/cache/list?limit=${limit}`)
+
+/** Run agent with SSE streaming. Returns a ReadableStream of AgentEvent. */
+export function runAgent(body: AgentRequest): ReadableStream<AgentEvent> {
+  const apiKey = localStorage.getItem('deepfetch_api_key') ?? ''
+  let controller: ReadableStreamDefaultController<AgentEvent>
+
+  const stream = new ReadableStream<AgentEvent>({
+    start(c) { controller = c },
+    cancel() { /* handled below */ },
+  })
+
+  ;(async () => {
+    try {
+      const res = await fetch('/v1/agent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+        },
+        body: JSON.stringify(body),
+      })
+
+      if (!res.ok || !res.body) {
+        const err = await res.json().catch(() => ({ error: res.statusText }))
+        controller.enqueue({ type: 'error', message: (err as { error: string }).error ?? 'Request failed' })
+        controller.close()
+        return
+      }
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+
+        // Parse SSE chunks
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() ?? ''
+
+        for (const part of parts) {
+          if (!part.trim()) continue
+          const lines = part.split('\n')
+          const dataLine = lines.find(l => l.startsWith('data:'))
+          if (!dataLine) continue
+          try {
+            const data = JSON.parse(dataLine.slice(5).trim()) as AgentEvent
+            controller.enqueue(data)
+          } catch { /* invalid JSON chunk */ }
+        }
+      }
+    } catch (err) {
+      controller.enqueue({ type: 'error', message: (err as Error).message })
+    } finally {
+      try { controller.close() } catch { /* already closed */ }
+    }
+  })()
+
+  return stream
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
+
 export interface SystemHealth {
   status: 'ok' | 'degraded' | 'overloaded'
   cpu_pct: number
@@ -187,4 +271,75 @@ export interface CreateCredSession {
   username: string
   password: string
   label?: string
+}
+
+// ─── Agent types ──────────────────────────────────────────────────────────────
+
+export interface ActRequest {
+  url: string
+  instruction: string
+  session_id?: string
+  use_cache?: boolean
+}
+
+export interface ActResult {
+  success: boolean
+  selector: string
+  action_type: string
+  value: string | null
+  cached: boolean
+  reasoning: string
+}
+
+export interface ExtractRequest {
+  url: string
+  instruction: string
+  schema?: Record<string, unknown>
+  session_id?: string
+}
+
+export interface ExtractResult {
+  url: string
+  data: Record<string, unknown> | null
+  instruction: string
+}
+
+export interface ObserveRequest {
+  url: string
+  session_id?: string
+}
+
+export interface ObserveResult {
+  page_purpose: string
+  elements: Array<{
+    index: number
+    selector: string
+    description: string
+    action: string
+    value_hint: string | null
+  }>
+  url: string
+}
+
+export interface AgentRequest {
+  task: string
+  tools?: string[]
+  max_steps?: number
+  session_id?: string
+}
+
+export type AgentEvent =
+  | { type: 'start';       task: string; tools: string[]; max_steps: number; provider: string }
+  | { type: 'step';        index: number; thought: string; tool: string; args: Record<string, unknown> }
+  | { type: 'tool_result'; index: number; tool: string; result: unknown; duration_ms: number; url?: string }
+  | { type: 'done';        result: unknown; summary: string; total_steps: number; duration_ms: number }
+  | { type: 'error';       message: string; step?: number }
+
+export interface AgentCacheEntry {
+  key: string
+  selector: string
+  action_type: string
+  hit_count: number
+  created_at: number
+  last_used: number
 }
