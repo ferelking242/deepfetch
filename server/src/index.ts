@@ -120,27 +120,6 @@ async function main() {
     protected_.get('/v1/platforms', async (_req: any, reply: any) => {
       return reply.send({ platforms: registry.list() })
     })
-
-    // Whoami
-    protected_.get('/v1/auth/whoami', async (_req: any, reply: any) => {
-      const authHeader = _req.headers['authorization'] as string ?? ''
-      const key = authHeader.replace('Bearer ', '').trim()
-      if (!key) return reply.status(401).send({ error: 'No key provided' })
-      if (key === cfg.server.master_secret) {
-        return reply.send({
-          type: 'master',
-          label: 'Master Key',
-          scopes: ['*'],
-          rate_limit_per_minute: 0,
-          expires_at: null,
-        })
-      }
-      // Check API key table
-      const db = getDb()
-      const row = db.prepare('SELECT * FROM api_keys WHERE id = ?').get(key)
-      if (!row) return reply.status(401).send({ error: 'Invalid key' })
-      return reply.send(row)
-    })
   })
 
   fastify.get('/', async (_req, reply) => reply.send({
