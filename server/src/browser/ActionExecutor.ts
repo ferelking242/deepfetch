@@ -132,7 +132,7 @@ async function runAction(
     }
 
     case 'upload_file': {
-      // Accept base64 data URIs or http(s) URLs
+      // Accept base64 data URIs only (no remote fetch — prevents SSRF)
       const paths: string[] = []
       for (const f of action.files) {
         if (f.startsWith('data:')) {
@@ -141,15 +141,14 @@ async function runAction(
           const dest = join(tmpdir(), `upload-${randomUUID()}.${ext}`)
           await writeFile(dest, Buffer.from(b64, 'base64'))
           paths.push(dest)
-        } else if (f.startsWith('http')) {
-          const res = await fetch(f, { signal: AbortSignal.timeout(15_000) })
-          const buf = Buffer.from(await res.arrayBuffer())
-          const ext = f.split('.').pop()?.split('?')[0] ?? 'bin'
-          const dest = join(tmpdir(), `upload-${randomUUID()}.${ext}`)
-          await writeFile(dest, buf)
-          paths.push(dest)
-        } else {
+        } else if (f.startsWith('/') || f.startsWith('./')) {
+          // Absolute/relative local path (e.g. previously downloaded file)
           paths.push(f)
+        } else {
+          throw new Error(
+            `upload_file: only base64 data URIs (data:...) or local paths are accepted. ` +
+            `Remote URLs are not supported to prevent server-side request forgery.`
+          )
         }
       }
       const input = page.locator(action.selector).first()
@@ -358,11 +357,11 @@ async function runAction(
 
     case 'block_resources': {
       const blocked = new Set(action.resource_types)
-      await page.route('**/*', (route) => {
+      await page.route('**/*', async (route) => {
         if (blocked.has(route.request().resourceType() as typeof action.resource_types[number])) {
-          route.abort()
+          await route.abort()
         } else {
-          route.continue()
+          await route.continue()
         }
       })
       break

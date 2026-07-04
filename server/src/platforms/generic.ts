@@ -51,8 +51,9 @@ export class GenericAdapter implements PlatformAdapter {
 
     // Playwright path
     const context = await this.pool.acquire(session?.cookies)
+    let page: import('playwright').Page | null = null
     try {
-      const page = await context.newPage()
+      page = await context.newPage()
       page.setDefaultTimeout(cfg.browser.navigation_timeout_ms)
 
       await page.goto(job.url, { waitUntil: 'domcontentloaded' })
@@ -74,9 +75,6 @@ export class GenericAdapter implements PlatformAdapter {
       const finalUrl = page.url()
       const { data, extracted_by } = await runExtractionPipeline(page, 'generic', logger, this.aiEngine)
 
-      await page.close()
-      await this.pool.release(context)
-
       return {
         url: finalUrl,
         platform: 'generic',
@@ -85,9 +83,9 @@ export class GenericAdapter implements PlatformAdapter {
         action_results: Object.keys(actionResults).length ? actionResults : undefined,
         duration_ms: 0,
       }
-    } catch (err) {
+    } finally {
+      await page?.close().catch(() => null)
       await this.pool.release(context)
-      throw err
     }
   }
 }

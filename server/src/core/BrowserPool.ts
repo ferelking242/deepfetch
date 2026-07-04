@@ -191,11 +191,13 @@ export class BrowserPool {
           if (param === 37446) return renderer  // UNMASKED_RENDERER_WEBGL
           return getParam.call(this, param)
         }
-        const getParam2 = WebGL2RenderingContext.prototype.getParameter
-        WebGL2RenderingContext.prototype.getParameter = function (param) {
-          if (param === 37445) return vendor
-          if (param === 37446) return renderer
-          return getParam2.call(this, param)
+        if (typeof WebGL2RenderingContext !== 'undefined') {
+          const getParam2 = WebGL2RenderingContext.prototype.getParameter
+          WebGL2RenderingContext.prototype.getParameter = function (param) {
+            if (param === 37445) return vendor
+            if (param === 37446) return renderer
+            return getParam2.call(this, param)
+          }
         }
       },
       webgl
