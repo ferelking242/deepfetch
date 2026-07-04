@@ -12,7 +12,6 @@ import {
 } from 'recharts'
 import { RefreshCw, Cpu, MemoryStick, Globe, Layers, Clock, Server } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { SystemHealth } from '@/lib/api'
 
 interface HistoryPoint {
   t: string
